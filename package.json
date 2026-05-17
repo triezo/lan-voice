@@ -1,0 +1,39 @@
+{
+  "name": "lan-voice",
+  "version": "1.0.0",
+  "description": "Локальный голосовой чат",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "server": "node server.js",
+    "build": "electron-builder --win --x64"
+  },
+  "dependencies": {
+    "node-forge": "^1.3.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "electron": "^34.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.lanvoice.app",
+    "productName": "LAN Voice",
+    "win": {
+      "target": "nsis",
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "server.js",
+      "index.html",
+      "icon.ico",
+      "node_modules/**/*"
+    ]
+  }
+}
