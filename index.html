@@ -255,6 +255,12 @@
     border-radius: 0; resize: none;
   }
   .ctrl-btn.sharing { background: #2d1a1a; border-color: var(--red); color: var(--red); }
+  .kb-mute-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+  .kb-mute-btn { padding: 5px 9px; border: 1px solid var(--border); background: transparent; border-radius: 6px; font-family: var(--mono); font-size: 10px; color: var(--text3); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+  .kb-mute-btn.active { background: var(--surface2); border-color: var(--yellow); color: var(--yellow); }
+  .kb-delay-slider { flex: 1; height: 3px; -webkit-appearance: none; appearance: none; background: var(--border2); border-radius: 2px; outline: none; cursor: pointer; }
+  .kb-delay-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); cursor: pointer; }
+  .kb-delay-label { font-size: 10px; color: var(--text3); width: 34px; text-align: right; flex-shrink: 0; }
 
   /* DAY THEME — retro-futurism */
   [data-theme="day"] {
@@ -381,6 +387,11 @@
           </div>
         </div>
         <div class="vol-meter"><div class="vol-meter-fill" id="my-vol-fill"></div></div>
+        <div class="kb-mute-row">
+          <button class="kb-mute-btn" id="btn-kb-mute" onclick="toggleKbMute()">⌨ Клав. мут</button>
+          <input class="kb-delay-slider" id="kb-delay-slider" type="range" min="100" max="800" step="50" value="400" oninput="kbMuteDelay=+this.value;document.getElementById('kb-delay-label').textContent=this.value+'мс'">
+          <span class="kb-delay-label" id="kb-delay-label">400мс</span>
+        </div>
       </div>
       <button class="leave-btn" onclick="leaveVoiceRoom()">Покинуть канал</button>
     </div>
@@ -786,6 +797,31 @@ function pttStop() {
   document.getElementById('status-dot').classList.remove('speaking');
   ws.send(JSON.stringify({ type: 'speaking', active: false }));
 }
+// ======================== KEYBOARD MUTE ========================
+let kbMuteEnabled = false, kbMuteDelay = 400, kbMuteTimer = null, kbMuteActive = false;
+
+function toggleKbMute() {
+  kbMuteEnabled = !kbMuteEnabled;
+  document.getElementById('btn-kb-mute').classList.toggle('active', kbMuteEnabled);
+  if (!kbMuteEnabled && kbMuteActive) {
+    kbMuteActive = false;
+    if (localStream && !isMuted && mode !== 'ptt') localStream.getAudioTracks().forEach(t => t.enabled = true);
+  }
+}
+
+function triggerKbMute() {
+  if (!kbMuteEnabled || !localStream || isMuted || mode === 'ptt') return;
+  if (!kbMuteActive) {
+    kbMuteActive = true;
+    localStream.getAudioTracks().forEach(t => t.enabled = false);
+  }
+  clearTimeout(kbMuteTimer);
+  kbMuteTimer = setTimeout(() => {
+    kbMuteActive = false;
+    if (localStream && !isMuted && mode !== 'ptt') localStream.getAudioTracks().forEach(t => t.enabled = true);
+  }, kbMuteDelay);
+}
+
 // ======================== PTT HOTKEY ========================
 let pttHotkey = { type: 'key', code: 'Space', label: 'Пробел' };
 let hotkeyListening = false;
@@ -828,8 +864,9 @@ document.addEventListener('keydown', e => {
     return;
   }
   if (pttHotkey.type === 'key' && e.code === pttHotkey.code && mode === 'ptt' && !e.repeat && document.activeElement !== document.getElementById('chat-input')) {
-    e.preventDefault(); pttStart();
+    e.preventDefault(); pttStart(); return;
   }
+  if (!e.repeat && document.activeElement !== document.getElementById('chat-input')) triggerKbMute();
 });
 
 document.addEventListener('keyup', e => {
