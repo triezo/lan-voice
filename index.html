@@ -536,21 +536,33 @@ function playSound(type) {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
     if (type === 'join') {
       osc.frequency.setValueAtTime(660, ctx.currentTime);
       osc.frequency.setValueAtTime(880, ctx.currentTime + 0.12);
       gain.gain.setValueAtTime(0.25, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      osc.connect(gain); gain.connect(ctx.destination);
       osc.start(); osc.stop(ctx.currentTime + 0.35);
+      setTimeout(() => ctx.close(), 600);
     } else {
-      osc.frequency.setValueAtTime(440, ctx.currentTime);
-      osc.frequency.setValueAtTime(300, ctx.currentTime + 0.12);
+      // reverb: reverse of join + delay feedback echo
+      const delay = ctx.createDelay(0.5);
+      const delayGain = ctx.createGain();
+      delay.delayTime.value = 0.09;
+      delayGain.gain.value = 0.38;
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.setValueAtTime(660, ctx.currentTime + 0.12);
       gain.gain.setValueAtTime(0.25, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-      osc.start(); osc.stop(ctx.currentTime + 0.4);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      gain.connect(delay);
+      delay.connect(delayGain);
+      delayGain.connect(delay);
+      delayGain.connect(ctx.destination);
+      osc.start(); osc.stop(ctx.currentTime + 0.35);
+      setTimeout(() => ctx.close(), 1400);
     }
-    setTimeout(() => ctx.close(), 600);
   } catch(e) {}
 }
 
@@ -588,6 +600,7 @@ async function onMessage(e) {
     document.getElementById('room-display').textContent = '#' + myRoom;
     document.getElementById('chat-room-label').textContent = '#' + myRoom;
     document.getElementById('voice-controls-area').style.display = 'block';
+    playSound('join');
     addSystemMsg('Ты вошёл в канал #' + myRoom);
     for (const peer of msg.peers) {
       peers[peer.id] = { name: peer.name, speaking: false };
@@ -834,7 +847,7 @@ async function joinVoiceRoom(roomId) {
 
 function leaveVoiceRoom(silent = false) {
   if (!myRoom) return;
-  if (!silent) ws.send(JSON.stringify({ type: 'leave-room' }));
+  if (!silent) { ws.send(JSON.stringify({ type: 'leave-room' })); playSound('leave'); }
   Object.values(peers).forEach(p => { if (p.pc) p.pc.close(); if (p.audioEl) p.audioEl.remove(); });
   peers = {};
   if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
