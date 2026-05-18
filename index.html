@@ -787,46 +787,68 @@ function pttStop() {
   ws.send(JSON.stringify({ type: 'speaking', active: false }));
 }
 // ======================== PTT HOTKEY ========================
-let pttHotkey = { code: 'Space', label: 'Пробел' };
+let pttHotkey = { type: 'key', code: 'Space', label: 'Пробел' };
 let hotkeyListening = false;
 
 function startHotkeyListen() {
   hotkeyListening = true;
   const badge = document.getElementById('ptt-hotkey-badge');
   badge.classList.add('listening');
-  badge.textContent = '...нажми клавишу';
+  badge.textContent = '...клавиша или кнопка мыши';
 }
 
 function stopHotkeyListen() {
   hotkeyListening = false;
-  const badge = document.getElementById('ptt-hotkey-badge');
-  badge.classList.remove('listening');
+  document.getElementById('ptt-hotkey-badge').classList.remove('listening');
+}
+
+function applyHotkey(hotkey) {
+  pttHotkey = hotkey;
+  document.getElementById('ptt-hotkey-badge').textContent = hotkey.label;
+  document.getElementById('ptt-btn-label').textContent = 'Держи (' + hotkey.label + ')';
+  stopHotkeyListen();
 }
 
 function formatKeyLabel(e) {
   if (e.code === 'Space') return 'Пробел';
   if (e.code.startsWith('Key')) return e.key.toUpperCase();
   if (e.code.startsWith('Digit')) return e.key;
-  if (e.code.startsWith('Mouse')) return 'Мышь ' + e.button;
   return e.key || e.code;
+}
+
+function mouseButtonLabel(btn) {
+  return ['ЛКМ', 'Средняя', 'ПКМ', 'Назад', 'Вперёд'][btn] ?? ('Кнопка ' + btn);
 }
 
 document.addEventListener('keydown', e => {
   if (hotkeyListening) {
+    if (e.key === 'Escape') { stopHotkeyListen(); return; }
     e.preventDefault();
-    pttHotkey = { code: e.code, label: formatKeyLabel(e) };
-    document.getElementById('ptt-hotkey-badge').textContent = pttHotkey.label;
-    document.getElementById('ptt-btn-label').textContent = 'Держи (' + pttHotkey.label + ')';
-    stopHotkeyListen();
+    applyHotkey({ type: 'key', code: e.code, label: formatKeyLabel(e) });
     return;
   }
-  if (e.code === pttHotkey.code && mode === 'ptt' && !e.repeat && document.activeElement !== document.getElementById('chat-input')) {
+  if (pttHotkey.type === 'key' && e.code === pttHotkey.code && mode === 'ptt' && !e.repeat && document.activeElement !== document.getElementById('chat-input')) {
     e.preventDefault(); pttStart();
   }
 });
 
 document.addEventListener('keyup', e => {
-  if (e.code === pttHotkey.code && mode === 'ptt') { e.preventDefault(); pttStop(); }
+  if (pttHotkey.type === 'key' && e.code === pttHotkey.code && mode === 'ptt') { e.preventDefault(); pttStop(); }
+});
+
+document.addEventListener('mousedown', e => {
+  if (hotkeyListening) {
+    e.preventDefault();
+    applyHotkey({ type: 'mouse', code: e.button, label: mouseButtonLabel(e.button) });
+    return;
+  }
+  if (pttHotkey.type === 'mouse' && e.button === pttHotkey.code && mode === 'ptt') {
+    e.preventDefault(); pttStart();
+  }
+});
+
+document.addEventListener('mouseup', e => {
+  if (pttHotkey.type === 'mouse' && e.button === pttHotkey.code && mode === 'ptt') pttStop();
 });
 
 document.addEventListener('click', e => {
