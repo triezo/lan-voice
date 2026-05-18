@@ -570,14 +570,12 @@ async function onMessage(e) {
   if (msg.type === 'user-online') {
     onlineUsers[msg.id] = msg.name;
     renderOnlineList();
-    playSound('join');
     addSystemMsg(msg.name + ' подключился к серверу');
   }
 
   if (msg.type === 'user-offline') {
     delete onlineUsers[msg.id];
     renderOnlineList();
-    playSound('leave');
     addSystemMsg(msg.name + ' покинул сервер');
   }
 
