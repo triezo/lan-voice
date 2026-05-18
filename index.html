@@ -255,6 +255,32 @@
     border-radius: 0; resize: none;
   }
   .ctrl-btn.sharing { background: #2d1a1a; border-color: var(--red); color: var(--red); }
+
+  /* DAY THEME — retro-futurism */
+  [data-theme="day"] {
+    --bg: #f2e4c8; --surface: #e8d5b0; --surface2: #ddc99e; --surface3: #cfb98a;
+    --border: #c4a86e; --border2: #a88a50; --accent: #b85c00; --accent2: #8a4200;
+    --green: #4a7c3f; --green-dim: #c8dfc4; --red: #c0392b; --yellow: #b07800;
+    --text: #1a0c04; --text2: #5a3a18; --text3: #8a6438; --mono: 'JetBrains Mono', monospace;
+  }
+  [data-theme="day"] body { background: var(--bg); }
+  [data-theme="day"] .btn { color: #fff; }
+  [data-theme="day"] .send-btn svg { color: #fff; }
+  [data-theme="day"] .ptt-btn.held { background: #c8dfc4; border-color: var(--green); color: var(--green); }
+  [data-theme="day"] .ctrl-btn.muted { background: #f0d0cc; border-color: var(--red); color: var(--red); }
+  [data-theme="day"] .ctrl-btn.sharing { background: #f0d0cc; border-color: var(--red); color: var(--red); }
+  [data-theme="day"] .disconnect-btn { border-color: #c0a090; color: var(--red); }
+  [data-theme="day"] .disconnect-btn:hover { background: #f0d0cc; }
+  [data-theme="day"] .leave-btn { border-color: #c0a090; color: var(--red); }
+  [data-theme="day"] .leave-btn:hover { background: #f0d0cc; }
+  [data-theme="day"] .screen-viewer { border-color: var(--border2); }
+  [data-theme="day"] .emoji-picker { box-shadow: 0 8px 32px rgba(80,40,0,0.25); }
+  [data-theme="day"] .source-picker { background: rgba(80,40,0,0.6); }
+  [data-theme="day"] .status-dot.connected { background: var(--green); box-shadow: 0 0 6px var(--green); }
+
+  /* Theme toggle button */
+  .theme-toggle { background: transparent; border: 1px solid var(--border2); border-radius: 6px; cursor: pointer; font-size: 15px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; transition: background 0.15s, border-color 0.15s; flex-shrink: 0; }
+  .theme-toggle:hover { background: var(--surface2); border-color: var(--accent); }
 </style>
 </head>
 <body>
@@ -271,6 +297,7 @@
     </svg>
     <h1>LAN VOICE</h1>
     <p>локальный голосовой чат · без интернета</p>
+    <button class="theme-toggle" id="theme-toggle-connect" onclick="toggleTheme()" title="Переключить тему" style="margin:10px auto 0"></button>
   </div>
   <div class="panel">
     <div class="panel-label">Подключение</div>
@@ -298,9 +325,12 @@
         <div class="server-name">LAN Voice</div>
         <div class="server-sub" id="you-display">ты: —</div>
       </div>
-      <div class="status-bar">
-        <div class="status-dot connected" id="status-dot"></div>
-        <span id="status-text">онлайн</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="status-bar">
+          <div class="status-dot connected" id="status-dot"></div>
+          <span id="status-text">онлайн</span>
+        </div>
+        <button class="theme-toggle" id="theme-toggle-chat" onclick="toggleTheme()" title="Переключить тему"></button>
       </div>
     </div>
 
@@ -1313,6 +1343,21 @@ document.addEventListener('click', e => {
     picker.classList.remove('open');
   }
 });
+
+// ======================== THEME ========================
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const icon = theme === 'day' ? '🌙' : '☀️';
+  document.querySelectorAll('.theme-toggle').forEach(b => b.textContent = icon);
+  localStorage.setItem('lv-theme', theme);
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'night';
+  applyTheme(current === 'day' ? 'night' : 'day');
+}
+
+applyTheme(localStorage.getItem('lv-theme') || 'night');
 </script>
   <!-- SCREEN VIEWER OVERLAY -->
   <div class="screen-viewer" id="screen-viewer">
