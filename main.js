@@ -1,7 +1,9 @@
-const { app, BrowserWindow, Tray, Menu, nativeImage, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, shell, ipcMain, dialog } = require('electron');
 const path = require('path');
-const { fork } = require('child_process');
+const { fork, execFile } = require('child_process');
 const https = require('https');
+const fs = require('fs');
+const os = require('os');
 
 let mainWindow = null;
 const DISCOVERY_PORT = 3001;
@@ -181,6 +183,65 @@ app.whenReady().then(() => {
       return [];
     }
   });
+  ipcMain.handle('save-recording', async (event, { buffer, format }) => {
+    const formats = {
+      mp4: { name: 'MP4 Video', ext: 'mp4' },
+      mkv: { name: 'MKV Video', ext: 'mkv' },
+      webm: { name: 'WebM Video', ext: 'webm' },
+      mp3: { name: 'MP3 Audio', ext: 'mp3' },
+      wav: { name: 'WAV Audio', ext: 'wav' },
+    };
+    const fmt = formats[format] || formats.mp4;
+
+    const result = await dialog.showSaveDialog(mainWindow, {
+      defaultPath: `запись-${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.${fmt.ext}`,
+      filters: [{ name: fmt.name, extensions: [fmt.ext] }, { name: 'Все файлы', extensions: ['*'] }],
+    });
+    if (result.canceled || !result.filePath) return { success: false };
+
+    const savePath = result.filePath;
+    const data = Buffer.from(buffer);
+
+    if (format === 'webm') {
+      fs.writeFileSync(savePath, data);
+      return { success: true, path: savePath };
+    }
+
+    const tempPath = path.join(os.tmpdir(), `lanvoice-${Date.now()}.webm`);
+    fs.writeFileSync(tempPath, data);
+
+    let ffmpegPath;
+    try { ffmpegPath = require('ffmpeg-static'); } catch(e) {
+      fs.unlinkSync(tempPath);
+      return { success: false, error: 'ffmpeg-static не найден' };
+    }
+
+    const args = ['-y', '-i', tempPath];
+    if (format === 'mp3') {
+      args.push('-vn', '-acodec', 'libmp3lame', '-q:a', '2');
+    } else if (format === 'wav') {
+      args.push('-vn', '-acodec', 'pcm_s16le', '-ar', '44100');
+    } else {
+      args.push('-vcodec', 'libx264', '-preset', 'fast', '-crf', '23', '-acodec', 'aac');
+    }
+    args.push(savePath);
+
+    return new Promise((resolve) => {
+      const proc = execFile(ffmpegPath, args);
+      let stderr = '';
+      proc.stderr.on('data', d => {
+        stderr += d;
+        const m = stderr.match(/time=(\d+:\d+:\d+)/g);
+        if (m) event.sender.send('recording-progress', { time: m[m.length - 1].replace('time=', '') });
+      });
+      proc.on('close', (code) => {
+        try { fs.unlinkSync(tempPath); } catch {}
+        if (code === 0) resolve({ success: true, path: savePath });
+        else resolve({ success: false, error: 'FFmpeg завершился с ошибкой ' + code });
+      });
+    });
+  });
+
   startServer();
   createWindow();
   createTray();

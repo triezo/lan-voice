@@ -240,6 +240,14 @@
   }
   .screen-viewer-expand { background: var(--accent); }
   .screen-viewer-close { background: var(--red); }
+  .screen-viewer-record { background: #2a6b2a; }
+  .screen-viewer-record.recording { background: var(--red); animation: pulse-rec 1s infinite; }
+  @keyframes pulse-rec { 0%,100%{opacity:1} 50%{opacity:0.5} }
+  .rec-format { background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; font-family: var(--mono); font-size: 10px; color: #ccc; padding: 2px 5px; cursor: pointer; outline: none; }
+  .rec-format option { background: #222; }
+  .rec-status { display: none; align-items: center; gap: 4px; font-family: var(--mono); font-size: 10px; color: var(--red); }
+  .rec-status.active { display: flex; }
+  .rec-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--red); flex-shrink: 0; animation: pulse-rec 1s infinite; }
   .screen-viewer video { width: 100%; height: 100%; object-fit: contain; }
   .screen-viewer.fullscreen-mode {
     top: 0; left: 0; right: 0; bottom: 0;
@@ -1168,7 +1176,10 @@ function toggleScreenFullscreen() {
   btn.textContent = viewer.classList.contains('fullscreen-mode') ? '⊡' : '⛶';
 }
 
+let recStream = null, recMediaRecorder = null, recChunks = [], recTimerInterval = null, recSeconds = 0;
+
 function showScreenViewer(peerId, stream) {
+  recStream = stream;
   const name = peers[peerId] ? peers[peerId].name : 'Участник';
   document.getElementById('screen-viewer-title').textContent = '🖥 ' + name + ' показывает экран';
   document.getElementById('screen-video').srcObject = stream;
@@ -1176,8 +1187,72 @@ function showScreenViewer(peerId, stream) {
 }
 
 function closeScreenViewer() {
+  if (recMediaRecorder && recMediaRecorder.state === 'recording') stopRecording();
+  recStream = null;
   document.getElementById('screen-viewer').classList.remove('active');
   document.getElementById('screen-video').srcObject = null;
+}
+
+function toggleRecording() {
+  if (recMediaRecorder && recMediaRecorder.state === 'recording') stopRecording();
+  else startRecording();
+}
+
+function startRecording() {
+  if (!recStream) return;
+  recChunks = []; recSeconds = 0;
+  const mime = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'].find(t => MediaRecorder.isTypeSupported(t));
+  recMediaRecorder = new MediaRecorder(recStream, { mimeType: mime });
+  recMediaRecorder.ondataavailable = e => { if (e.data.size > 0) recChunks.push(e.data); };
+  recMediaRecorder.onstop = saveRecording;
+  recMediaRecorder.start(1000);
+  document.getElementById('btn-record').textContent = '⏹';
+  document.getElementById('btn-record').classList.add('recording');
+  document.getElementById('rec-status').classList.add('active');
+  recTimerInterval = setInterval(() => {
+    recSeconds++;
+    const m = String(Math.floor(recSeconds / 60)).padStart(2, '0');
+    const s = String(recSeconds % 60).padStart(2, '0');
+    document.getElementById('rec-time').textContent = m + ':' + s;
+  }, 1000);
+}
+
+function stopRecording() {
+  if (!recMediaRecorder || recMediaRecorder.state === 'inactive') return;
+  recMediaRecorder.stop();
+  clearInterval(recTimerInterval);
+  document.getElementById('btn-record').textContent = '⏺';
+  document.getElementById('btn-record').classList.remove('recording');
+  document.getElementById('rec-status').classList.remove('active');
+}
+
+async function saveRecording() {
+  const format = document.getElementById('rec-format').value;
+  const blob = new Blob(recChunks, { type: 'video/webm' });
+  recChunks = [];
+
+  if (window.electronAPI && window.electronAPI.saveRecording) {
+    const btn = document.getElementById('btn-record');
+    btn.textContent = '⏳'; btn.disabled = true;
+    if (window.electronAPI.onRecordingProgress) {
+      window.electronAPI.onRecordingProgress(d => {
+        document.getElementById('rec-time').textContent = d.time;
+        document.getElementById('rec-status').classList.add('active');
+      });
+    }
+    const buf = await blob.arrayBuffer();
+    const result = await window.electronAPI.saveRecording(buf, format);
+    btn.textContent = '⏺'; btn.disabled = false;
+    document.getElementById('rec-status').classList.remove('active');
+    if (result.success) addSystemMsg('✅ Запись сохранена: ' + result.path.split(/[\\/]/).pop());
+    else addSystemMsg('⚠ Ошибка записи: ' + (result.error || 'неизвестно'));
+  } else {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `запись-${Date.now()}.webm`; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    addSystemMsg('✅ Запись скачана как WebM');
+  }
 }
 
 function escHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -1244,6 +1319,15 @@ document.addEventListener('click', e => {
     <div class="screen-viewer-header" id="screen-viewer-drag">
       <div class="screen-viewer-title" id="screen-viewer-title">Экран участника</div>
       <div class="screen-viewer-actions">
+        <span class="rec-status" id="rec-status"><div class="rec-dot"></div><span id="rec-time">00:00</span></span>
+        <select class="rec-format" id="rec-format" title="Формат записи">
+          <option value="mp4">MP4</option>
+          <option value="mkv">MKV</option>
+          <option value="webm">WebM</option>
+          <option value="mp3">MP3</option>
+          <option value="wav">WAV</option>
+        </select>
+        <button class="screen-viewer-btn screen-viewer-record" id="btn-record" onclick="toggleRecording()" title="Записать">⏺</button>
         <button class="screen-viewer-btn screen-viewer-expand" onclick="toggleScreenFullscreen()">⛶</button>
         <button class="screen-viewer-btn screen-viewer-close" onclick="closeScreenViewer()">✕</button>
       </div>
