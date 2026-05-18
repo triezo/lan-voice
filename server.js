@@ -80,11 +80,31 @@ const clientNames = new Map();
 
 function broadcast(roomId, data, excludeId = null) {
   if (!rooms[roomId]) return;
-  rooms[roomId].forEach(clientId => {
-    if (clientId === excludeId) return;
-    const ws = clients.get(clientId);
+  rooms[roomId].forEach(id => {
+    if (id === excludeId) return;
+    const ws = clients.get(id);
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
   });
+}
+
+function broadcastAll(data, excludeId = null) {
+  clients.forEach((ws, id) => {
+    if (id === excludeId) return;
+    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
+  });
+}
+
+function getRoomState() {
+  return Object.entries(rooms).map(([id, members]) => ({
+    id,
+    members: [...members].map(uid => ({ id: uid, name: clientNames.get(uid) || 'Аноним' }))
+  }));
+}
+
+function getOnlineList() {
+  return [...clients.keys()]
+    .filter(id => clientNames.has(id))
+    .map(id => ({ id, name: clientNames.get(id) }));
 }
 
 let nextId = 1;
@@ -94,22 +114,27 @@ wss.on('connection', (ws) => {
   clients.set(clientId, ws);
   let currentRoom = null;
 
-  ws.send(JSON.stringify({ type: 'welcome', id: clientId }));
-
   ws.on('message', (raw) => {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
+
+    if (msg.type === 'hello') {
+      clientNames.set(clientId, msg.name || 'Аноним');
+      ws.send(JSON.stringify({ type: 'server-hello', id: clientId, rooms: getRoomState(), online: getOnlineList() }));
+      broadcastAll({ type: 'user-online', id: clientId, name: msg.name || 'Аноним' }, clientId);
+      console.log(`${msg.name || clientId} подключился к серверу`);
+    }
 
     if (msg.type === 'join') {
       const roomId = msg.room || 'main';
       currentRoom = roomId;
       if (!rooms[roomId]) rooms[roomId] = new Set();
-      const existingPeers = [...rooms[roomId]];
+      const existingPeers = [...rooms[roomId]].map(id => ({ id, name: clientNames.get(id) || 'Аноним' }));
       rooms[roomId].add(clientId);
       ws.send(JSON.stringify({ type: 'room-peers', peers: existingPeers, room: roomId }));
-      broadcast(roomId, { type: 'peer-joined', peerId: clientId, name: msg.name || 'Аноним', room: roomId }, clientId);
-      clientNames.set(clientId, msg.name || 'Аноним');
-      console.log(`[${roomId}] ${msg.name || clientId} подключился. Всего: ${rooms[roomId].size}`);
+      broadcast(roomId, { type: 'peer-joined', peerId: clientId, name: clientNames.get(clientId) || 'Аноним', room: roomId }, clientId);
+      broadcastAll({ type: 'rooms-update', rooms: getRoomState() });
+      console.log(`[${roomId}] ${clientNames.get(clientId) || clientId} вошёл. Всего: ${rooms[roomId].size}`);
     }
 
     if (msg.type === 'leave-room' && currentRoom) {
@@ -119,33 +144,30 @@ wss.on('connection', (ws) => {
         if (rooms[currentRoom].size === 0) delete rooms[currentRoom];
       }
       currentRoom = null;
+      broadcastAll({ type: 'rooms-update', rooms: getRoomState() });
     }
 
     if (msg.type === 'signal') {
       const targetWs = clients.get(msg.target);
-      if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+      if (targetWs && targetWs.readyState === WebSocket.OPEN)
         targetWs.send(JSON.stringify({ type: 'signal', from: clientId, signal: msg.signal }));
-      }
     }
 
     if (msg.type === 'screen-start') {
       if (currentRoom) broadcast(currentRoom, { type: 'screen-start', peerId: clientId }, clientId);
     }
-
     if (msg.type === 'screen-stop') {
       if (currentRoom) broadcast(currentRoom, { type: 'screen-stop', peerId: clientId }, clientId);
     }
-
     if (msg.type === 'screen-signal') {
       const targetWs = clients.get(msg.target);
-      if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+      if (targetWs && targetWs.readyState === WebSocket.OPEN)
         targetWs.send(JSON.stringify({ type: 'screen-signal', from: clientId, signal: msg.signal }));
-      }
     }
 
     if (msg.type === 'chat') {
-      if (currentRoom && msg.text && msg.text.trim()) {
-        broadcast(currentRoom, { type: 'chat', peerId: clientId, name: clientNames.get(clientId) || 'Аноним', text: msg.text.slice(0, 2000) }, clientId);
+      if (msg.text && msg.text.trim()) {
+        broadcastAll({ type: 'chat', peerId: clientId, name: clientNames.get(clientId) || 'Аноним', text: msg.text.slice(0, 2000) }, clientId);
       }
     }
 
@@ -155,13 +177,17 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
+    const name = clientNames.get(clientId) || 'Аноним';
     clients.delete(clientId);
+    clientNames.delete(clientId);
     if (currentRoom && rooms[currentRoom]) {
       rooms[currentRoom].delete(clientId);
       broadcast(currentRoom, { type: 'peer-left', peerId: clientId });
       if (rooms[currentRoom].size === 0) delete rooms[currentRoom];
     }
-    console.log(`Клиент ${clientId} отключился`);
+    broadcastAll({ type: 'user-offline', id: clientId, name });
+    broadcastAll({ type: 'rooms-update', rooms: getRoomState() });
+    console.log(`${name} отключился`);
   });
 });
 

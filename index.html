@@ -27,9 +27,10 @@
   .panel-label { font-size: 10px; color: var(--text3); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 12px; }
   .field { margin-bottom: 12px; }
   .field label { display: block; font-size: 11px; color: var(--text2); margin-bottom: 6px; }
-  .field input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; padding: 9px 12px; font-family: var(--mono); font-size: 13px; color: var(--text); outline: none; transition: border-color 0.15s; }
-  .field input:focus { border-color: var(--accent); }
+  .field input, .field select { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; padding: 9px 12px; font-family: var(--mono); font-size: 13px; color: var(--text); outline: none; transition: border-color 0.15s; appearance: none; -webkit-appearance: none; }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
   .field input::placeholder { color: var(--text3); }
+  .field select option { background: var(--surface2); color: var(--text); }
   .btn { display: block; width: 100%; padding: 11px; background: var(--accent); border: none; border-radius: 8px; font-family: var(--mono); font-size: 13px; font-weight: 600; color: #fff; cursor: pointer; transition: background 0.15s, transform 0.1s; }
   .btn:hover { background: var(--accent2); }
   .btn:active { transform: scale(0.98); }
@@ -40,6 +41,19 @@
   .discover-btn:hover { background: var(--surface2); color: var(--text); border-color: var(--accent); }
   .discover-btn.searching { color: var(--accent); border-color: var(--accent); animation: blink 1s infinite; }
   @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.5} }
+  .rooms-list { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .room-chip { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; cursor: pointer; transition: all 0.15s; font-size: 12px; }
+  .room-chip:hover { border-color: var(--accent); background: var(--surface3); }
+  .room-chip.active-room { border-color: var(--accent); }
+  .room-chip-name { color: var(--text); font-weight: 500; }
+  .room-chip-count { color: var(--text3); font-size: 11px; }
+  .rooms-empty { font-size: 11px; color: var(--text3); text-align: center; padding: 8px 0; }
+  .rooms-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .rooms-header-label { font-size: 11px; color: var(--text2); }
+  .rooms-refresh { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 13px; padding: 2px 4px; border-radius: 4px; transition: color 0.15s; }
+  .rooms-refresh:hover { color: var(--accent); }
+  .rooms-refresh.spinning { animation: spin 0.6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
   /* CHAT SCREEN - two column layout */
   #app-chat { display: none; width: 100vw; height: 100vh; flex-direction: row; }
@@ -48,18 +62,50 @@
   .voice-panel {
     width: 260px; min-width: 220px; flex-shrink: 0;
     background: var(--surface); border-right: 1px solid var(--border);
-    display: flex; flex-direction: column; padding: 16px; gap: 12px;
+    display: flex; flex-direction: column; padding: 12px; gap: 0;
     overflow-y: auto;
   }
-  .room-header { display: flex; align-items: center; justify-content: space-between; }
-  .room-name { font-size: 13px; font-weight: 600; }
-  .room-tag { font-size: 10px; color: var(--text3); }
+
+  /* Server header */
+  .server-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+  .server-name { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; }
+  .server-sub { font-size: 10px; color: var(--text3); margin-top: 2px; }
   .status-bar { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text3); }
   .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text3); flex-shrink: 0; }
   .status-dot.connected { background: var(--green); box-shadow: 0 0 6px var(--green); }
   .status-dot.speaking { animation: pulse 0.6s infinite; }
   @keyframes pulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.5);opacity:0.6} }
-  .peers-list { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+
+  /* Sidebar sections */
+  .sidebar-section { margin-bottom: 12px; }
+  .sidebar-label { font-size: 10px; color: var(--text3); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 6px; padding: 0 2px; }
+
+  /* Online users list */
+  .online-item { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; transition: background 0.1s; }
+  .online-item:hover { background: var(--surface2); }
+  .online-avatar { width: 24px; height: 24px; border-radius: 5px; background: var(--surface3); border: 1px solid var(--border2); display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; color: var(--text2); flex-shrink: 0; }
+  .online-name { font-size: 12px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Voice channels */
+  .channel-item { margin-bottom: 2px; }
+  .channel-row { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 6px; cursor: pointer; transition: background 0.1s; user-select: none; }
+  .channel-row:hover { background: var(--surface2); }
+  .channel-row.active { background: var(--surface3); }
+  .channel-row.active .ch-name { color: var(--text); }
+  .ch-icon { font-size: 13px; flex-shrink: 0; opacity: 0.6; }
+  .ch-name { flex: 1; font-size: 12px; color: var(--text2); font-weight: 500; }
+  .ch-badge { font-size: 10px; color: var(--text3); }
+  .ch-members { padding-left: 26px; }
+  .ch-member { display: flex; align-items: center; gap: 6px; padding: 3px 4px; border-radius: 5px; font-size: 11px; color: var(--text3); }
+  .ch-member.speaking { color: var(--green); }
+  .ch-member-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--text3); flex-shrink: 0; }
+  .ch-member.speaking .ch-member-dot { background: var(--green); }
+  .ch-new-row { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 6px; cursor: pointer; transition: background 0.1s; }
+  .ch-new-row:hover { background: var(--surface2); }
+  .ch-new-icon { font-size: 13px; opacity: 0.4; }
+  .ch-new-label { font-size: 11px; color: var(--text3); }
+
+  /* Peer rows (inside voice channel while connected) */
   .peer-row { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; background: var(--surface2); border-radius: 7px; border: 1px solid var(--border); transition: border-color 0.2s; }
   .peer-row.speaking { border-color: var(--green); }
   .peer-avatar { width: 28px; height: 28px; border-radius: 6px; background: var(--surface3); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: var(--text2); flex-shrink: 0; border: 1px solid var(--border2); transition: border-color 0.2s, color 0.2s; }
@@ -77,6 +123,11 @@
   .peer-volume .vol-pct { font-size: 10px; color: var(--text2); width: 36px; text-align: right; flex-shrink: 0; font-weight: 500; }
   .empty-state { text-align: center; padding: 20px; color: var(--text3); font-size: 11px; }
 
+  /* Bottom bar */
+  .sidebar-bottom { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+  .disconnect-btn { width: 100%; padding: 8px; background: transparent; border: 1px solid #3a1a1a; border-radius: 8px; font-family: var(--mono); font-size: 11px; color: var(--red); cursor: pointer; transition: all 0.15s; }
+  .disconnect-btn:hover { background: #2d1a1a; }
+
   .voice-controls { display: flex; flex-direction: column; gap: 8px; }
   .mode-toggle { display: flex; gap: 5px; }
   .mode-btn { flex: 1; padding: 6px; border: 1px solid var(--border); background: transparent; border-radius: 6px; font-family: var(--mono); font-size: 10px; color: var(--text3); cursor: pointer; transition: all 0.15s; }
@@ -88,6 +139,10 @@
   .ctrl-btn svg { width: 16px; height: 16px; }
   .ptt-btn { width: 100%; padding: 10px; border: 1.5px solid var(--border2); background: var(--surface2); border-radius: 8px; font-family: var(--mono); font-size: 11px; color: var(--text2); cursor: pointer; user-select: none; transition: all 0.1s; display: flex; align-items: center; justify-content: center; gap: 6px; }
   .ptt-btn.held { background: var(--green-dim); border-color: var(--green); color: var(--green); transform: scale(0.98); }
+  .ptt-hotkey-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 11px; color: var(--text3); }
+  .ptt-hotkey-badge { background: var(--surface3); border: 1px solid var(--border2); border-radius: 5px; padding: 3px 8px; font-size: 12px; color: var(--text2); font-family: var(--mono); min-width: 60px; text-align: center; cursor: pointer; transition: all 0.15s; }
+  .ptt-hotkey-badge:hover { border-color: var(--accent); color: var(--text); }
+  .ptt-hotkey-badge.listening { border-color: var(--yellow); color: var(--yellow); animation: blink 0.7s infinite; }
   .vol-meter { height: 3px; background: var(--surface3); border-radius: 2px; overflow: hidden; }
   .vol-meter-fill { height: 100%; background: var(--green); border-radius: 2px; width: 0%; transition: width 0.08s; }
   .leave-btn { padding: 9px; background: transparent; border: 1px solid #3a1a1a; border-radius: 8px; font-family: var(--mono); font-size: 11px; color: var(--red); cursor: pointer; transition: all 0.15s; }
@@ -117,7 +172,20 @@
 
   .chat-system { text-align: center; font-size: 10px; color: var(--text3); padding: 6px 0; letter-spacing: 0.05em; }
 
-  .chat-input-area { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: flex-end; }
+  .chat-input-area { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: flex-end; position: relative; }
+  .emoji-btn { width: 36px; height: 36px; background: transparent; border: 1px solid var(--border2); border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 16px; transition: background 0.15s, border-color 0.15s; }
+  .emoji-btn:hover { background: var(--surface2); border-color: var(--accent); }
+  .emoji-picker { position: absolute; bottom: 60px; left: 16px; width: 320px; background: var(--surface); border: 1px solid var(--border2); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); z-index: 500; display: none; flex-direction: column; overflow: hidden; }
+  .emoji-picker.open { display: flex; }
+  .emoji-cats { display: flex; border-bottom: 1px solid var(--border); }
+  .emoji-cat-btn { flex: 1; padding: 7px 4px; background: transparent; border: none; font-size: 15px; cursor: pointer; opacity: 0.5; transition: opacity 0.15s, background 0.15s; }
+  .emoji-cat-btn:hover { opacity: 0.85; background: var(--surface2); }
+  .emoji-cat-btn.active { opacity: 1; background: var(--surface2); }
+  .emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 1px; padding: 8px; max-height: 200px; overflow-y: auto; }
+  .emoji-grid::-webkit-scrollbar { width: 4px; }
+  .emoji-grid::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+  .emoji-item { display: flex; align-items: center; justify-content: center; font-size: 20px; padding: 4px; border-radius: 6px; cursor: pointer; transition: background 0.1s; user-select: none; }
+  .emoji-item:hover { background: var(--surface2); }
   .chat-input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; font-family: var(--mono); font-size: 12px; color: var(--text); outline: none; resize: none; max-height: 120px; line-height: 1.4; transition: border-color 0.15s; }
   .chat-input:focus { border-color: var(--accent); }
   .chat-input::placeholder { color: var(--text3); }
@@ -200,7 +268,8 @@
     <div class="panel-label">Подключение</div>
     <div class="field"><label>Твоё имя</label><input id="inp-name" type="text" placeholder="Например: Бека" maxlength="20" autocomplete="off"/></div>
     <div class="field"><label>IP хоста <span style="color:var(--text3)">(кто запустил server.js)</span></label><input id="inp-host" type="text" placeholder="192.168.1.xx или localhost" autocomplete="off"/></div>
-    <div class="field"><label>Комната</label><input id="inp-room" type="text" placeholder="main" maxlength="20" autocomplete="off"/></div>
+    <div class="field"><label>Микрофон</label><select id="inp-mic"><option value="">— загрузка... —</option></select></div>
+    <div class="field"><label>Наушники / динамики</label><select id="inp-output"><option value="">— загрузка... —</option></select></div>
     <button class="btn" id="btn-connect">Подключиться</button>
     <div class="err" id="conn-err"></div>
   </div>
@@ -212,55 +281,77 @@
 
 <!-- CHAT SCREEN -->
 <div id="app-chat">
-  <!-- LEFT: VOICE -->
+  <!-- LEFT: VOICE PANEL -->
   <div class="voice-panel">
-    <div>
-      <div class="room-header">
-        <div>
-          <div class="room-name" id="room-display">#main</div>
-          <div class="room-tag" id="you-display">ты: —</div>
+
+    <!-- Server header -->
+    <div class="server-header">
+      <div>
+        <div class="server-name">LAN Voice</div>
+        <div class="server-sub" id="you-display">ты: —</div>
+      </div>
+      <div class="status-bar">
+        <div class="status-dot connected" id="status-dot"></div>
+        <span id="status-text">онлайн</span>
+      </div>
+    </div>
+
+    <!-- Online users -->
+    <div class="sidebar-section">
+      <div class="sidebar-label">В СЕТИ — <span id="online-count">0</span></div>
+      <div id="online-list"></div>
+    </div>
+
+    <!-- Voice channels -->
+    <div class="sidebar-section" style="flex:1">
+      <div class="sidebar-label">ГОЛОСОВЫЕ КАНАЛЫ</div>
+      <div id="channels-list"></div>
+    </div>
+
+    <!-- Voice controls (shown only when in a channel) -->
+    <div id="voice-controls-area" style="display:none">
+      <div id="peers-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>
+      <div class="voice-controls">
+        <div class="panel-label" style="margin-bottom:6px">Голос — <span id="room-display" style="color:var(--accent)">#main</span></div>
+        <div class="mode-toggle">
+          <button class="mode-btn active" id="mode-vox" onclick="setMode('vox')">Авто</button>
+          <button class="mode-btn" id="mode-ptt" onclick="setMode('ptt')">PTT</button>
         </div>
-        <div class="status-bar">
-          <div class="status-dot connected" id="status-dot"></div>
-          <span id="status-text">онлайн</span>
+        <div class="ctrl-row">
+          <button class="ctrl-btn" id="btn-mic" onclick="toggleMic()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            <span id="mic-label">микрофон</span>
+          </button>
+          <button class="ctrl-btn" id="btn-deafen" onclick="toggleDeafen()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+            <span id="deaf-label">наушники</span>
+          </button>
+          <button class="ctrl-btn" id="btn-screen" onclick="toggleScreen()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            <span id="screen-label">экран</span>
+          </button>
         </div>
+        <div id="ptt-area" style="display:none">
+          <button class="ptt-btn" id="ptt-btn" onmousedown="pttStart()" onmouseup="pttStop()" ontouchstart="pttStart(event)" ontouchend="pttStop()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/></svg>
+            <span id="ptt-btn-label">Держи (ПРОБЕЛ)</span>
+          </button>
+          <div class="ptt-hotkey-row">
+            <span>Хоткей:</span>
+            <span class="ptt-hotkey-badge" id="ptt-hotkey-badge" onclick="startHotkeyListen()" title="Кликни чтобы изменить">Пробел</span>
+            <span style="color:var(--text3);font-size:10px">· кликни чтобы изменить</span>
+          </div>
+        </div>
+        <div class="vol-meter"><div class="vol-meter-fill" id="my-vol-fill"></div></div>
       </div>
+      <button class="leave-btn" onclick="leaveVoiceRoom()">Покинуть канал</button>
     </div>
 
-    <div class="peers-list" id="peers-list">
-      <div class="empty-state">ждём участников...</div>
+    <!-- Bottom: disconnect -->
+    <div class="sidebar-bottom">
+      <button class="disconnect-btn" onclick="disconnectServer()">Отключиться от сервера</button>
     </div>
 
-    <div class="voice-controls">
-      <div class="panel-label" style="margin-bottom:6px">Голос</div>
-      <div class="mode-toggle">
-        <button class="mode-btn active" id="mode-vox" onclick="setMode('vox')">Авто</button>
-        <button class="mode-btn" id="mode-ptt" onclick="setMode('ptt')">PTT</button>
-      </div>
-      <div class="ctrl-row">
-        <button class="ctrl-btn" id="btn-mic" onclick="toggleMic()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-          <span id="mic-label">микрофон</span>
-        </button>
-        <button class="ctrl-btn" id="btn-deafen" onclick="toggleDeafen()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
-          <span id="deaf-label">наушники</span>
-        </button>
-        <button class="ctrl-btn" id="btn-screen" onclick="toggleScreen()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-          <span id="screen-label">экран</span>
-        </button>
-      </div>
-      <div id="ptt-area" style="display:none">
-        <button class="ptt-btn" id="ptt-btn" onmousedown="pttStart()" onmouseup="pttStop()" ontouchstart="pttStart(event)" ontouchend="pttStop()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/></svg>
-          Держи (ПРОБЕЛ)
-        </button>
-      </div>
-      <div class="vol-meter"><div class="vol-meter-fill" id="my-vol-fill"></div></div>
-    </div>
-
-    <button class="leave-btn" onclick="leaveRoom()">Выйти</button>
   </div>
 
   <!-- RIGHT: TEXT CHAT -->
@@ -271,6 +362,11 @@
     </div>
     <div class="chat-messages" id="chat-messages"></div>
     <div class="chat-input-area">
+      <div class="emoji-picker" id="emoji-picker">
+        <div class="emoji-cats" id="emoji-cats"></div>
+        <div class="emoji-grid" id="emoji-grid"></div>
+      </div>
+      <button class="emoji-btn" id="emoji-btn" onclick="toggleEmojiPicker()">😊</button>
       <textarea class="chat-input" id="chat-input" placeholder="Написать сообщение..." rows="1"></textarea>
       <button class="send-btn" onclick="sendChat()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
@@ -283,6 +379,8 @@
 // ======================== STATE ========================
 let ws = null, myId = null, myName = '', myRoom = '';
 let peers = {};
+let onlineUsers = {};
+let serverRooms = [];
 let localStream = null;
 let isMuted = false, isDeafened = false;
 let mode = 'vox', pttActive = false;
@@ -297,7 +395,7 @@ let lastMsgSender = null;
 
 // ======================== CONNECT ========================
 document.getElementById('btn-connect').onclick = connect;
-['inp-room','inp-host','inp-name'].forEach(id => {
+['inp-host','inp-name'].forEach(id => {
   document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') connect(); });
 });
 
@@ -319,8 +417,7 @@ async function discoverServer() {
       btn.innerHTML = '❌ Не найден — введи IP вручную';
       btn.style.color = 'var(--red)';
       setTimeout(() => {
-        btn.style.color = '';
-        btn.style.borderColor = '';
+        btn.style.color = ''; btn.style.borderColor = '';
         btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Найти сервер в сети';
       }, 3000);
     }
@@ -333,17 +430,13 @@ async function discoverServer() {
 async function connect() {
   const name = document.getElementById('inp-name').value.trim() || 'Аноним';
   let host = document.getElementById('inp-host').value.trim() || 'localhost';
-  const room = document.getElementById('inp-room').value.trim() || 'main';
-  myName = name; myRoom = room;
+  myName = name;
   host = host.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
   if (!host.includes(':')) host += ':3000';
   document.getElementById('conn-err').textContent = '';
-  try { await requestMic(); } catch(e) {
-    document.getElementById('conn-err').textContent = '⚠ Нет доступа к микрофону: ' + e.message; return;
-  }
   ws = new WebSocket(`wss://${host}`);
-  ws.onopen = () => ws.send(JSON.stringify({ type: 'join', room, name }));
   ws.onerror = () => { document.getElementById('conn-err').textContent = '⚠ Не удалось подключиться'; };
+  ws.onopen = () => ws.send(JSON.stringify({ type: 'hello', name }));
   ws.onmessage = onMessage;
   ws.onclose = () => {
     document.getElementById('status-dot').classList.remove('connected');
@@ -352,41 +445,139 @@ async function connect() {
 }
 
 async function requestMic() {
-  localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 48000 }, video: false });
+  const micId = document.getElementById('inp-mic').value;
+  const audioConstraints = {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+    sampleRate: 48000,
+  };
+  if (micId) audioConstraints.deviceId = { exact: micId };
+  localStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints, video: false });
+
+  // Применяем выбранный аудио-выход (если поддерживается)
+  const outputId = document.getElementById('inp-output').value;
+  if (outputId) window._selectedOutputId = outputId;
+
   setupVolumeAnalyser();
+}
+
+async function populateDevices() {
+  // Сначала запрашиваем разрешение чтобы браузер показал реальные имена
+  try {
+    const tmp = await navigator.mediaDevices.getUserMedia({ audio: true });
+    tmp.getTracks().forEach(t => t.stop());
+  } catch(e) {}
+
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const micSel = document.getElementById('inp-mic');
+  const outSel = document.getElementById('inp-output');
+  micSel.innerHTML = '';
+  outSel.innerHTML = '';
+
+  devices.filter(d => d.kind === 'audioinput').forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d.deviceId;
+    opt.textContent = d.label || ('Микрофон ' + d.deviceId.slice(0, 6));
+    micSel.appendChild(opt);
+  });
+
+  devices.filter(d => d.kind === 'audiooutput').forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d.deviceId;
+    opt.textContent = d.label || ('Динамики ' + d.deviceId.slice(0, 6));
+    outSel.appendChild(opt);
+  });
+}
+
+populateDevices();
+
+// ======================== SOUNDS ========================
+function playSound(type) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    if (type === 'join') {
+      osc.frequency.setValueAtTime(660, ctx.currentTime);
+      osc.frequency.setValueAtTime(880, ctx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.25, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      osc.start(); osc.stop(ctx.currentTime + 0.35);
+    } else {
+      osc.frequency.setValueAtTime(440, ctx.currentTime);
+      osc.frequency.setValueAtTime(300, ctx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.25, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      osc.start(); osc.stop(ctx.currentTime + 0.4);
+    }
+    setTimeout(() => ctx.close(), 600);
+  } catch(e) {}
 }
 
 // ======================== MESSAGES ========================
 async function onMessage(e) {
   const msg = JSON.parse(e.data);
-  if (msg.type === 'welcome') { myId = msg.id; }
 
-  if (msg.type === 'room-peers') {
+  if (msg.type === 'server-hello') {
+    myId = msg.id;
     document.getElementById('app-connect').style.display = 'none';
     document.getElementById('app-chat').style.display = 'flex';
-    document.getElementById('room-display').textContent = '#' + myRoom;
     document.getElementById('you-display').textContent = 'ты: ' + myName;
+    renderOnlineList(msg.online);
+    renderChannels(msg.rooms);
+  }
+
+  if (msg.type === 'user-online') {
+    onlineUsers[msg.id] = msg.name;
+    renderOnlineList();
+    playSound('join');
+    addSystemMsg(msg.name + ' подключился к серверу');
+  }
+
+  if (msg.type === 'user-offline') {
+    delete onlineUsers[msg.id];
+    renderOnlineList();
+    playSound('leave');
+    addSystemMsg(msg.name + ' покинул сервер');
+  }
+
+  if (msg.type === 'rooms-update') {
+    renderChannels(msg.rooms);
+  }
+
+  if (msg.type === 'room-peers') {
+    myRoom = msg.room;
+    document.getElementById('room-display').textContent = '#' + myRoom;
     document.getElementById('chat-room-label').textContent = '#' + myRoom;
-    addSystemMsg('Ты подключился к комнате #' + myRoom);
-    for (const peerId of msg.peers) await createPeerConnection(peerId, true);
+    document.getElementById('voice-controls-area').style.display = 'block';
+    addSystemMsg('Ты вошёл в канал #' + myRoom);
+    for (const peer of msg.peers) {
+      peers[peer.id] = { name: peer.name, speaking: false };
+      await createPeerConnection(peer.id, true);
+    }
     renderPeers();
+    renderChannels();
   }
 
   if (msg.type === 'peer-joined') {
     peers[msg.peerId] = { name: msg.name, speaking: false };
     await createPeerConnection(msg.peerId, false);
-    addSystemMsg(msg.name + ' подключился');
+    addSystemMsg(msg.name + ' вошёл в канал');
     renderPeers();
+    renderChannels();
   }
 
   if (msg.type === 'peer-left') {
     if (peers[msg.peerId]) {
-      addSystemMsg((peers[msg.peerId].name || 'Кто-то') + ' вышел');
+      addSystemMsg((peers[msg.peerId].name || 'Кто-то') + ' покинул канал');
       if (peers[msg.peerId].pc) peers[msg.peerId].pc.close();
       if (peers[msg.peerId].audioEl) peers[msg.peerId].audioEl.remove();
       delete peers[msg.peerId];
     }
     renderPeers();
+    renderChannels();
   }
 
   if (msg.type === 'signal') {
@@ -460,9 +651,18 @@ async function createPeerConnection(peerId, isInitiator) {
   pc.onicecandidate = (e) => { if (e.candidate) ws.send(JSON.stringify({ type: 'signal', target: peerId, signal: e.candidate })); };
   pc.ontrack = (e) => {
     let audio = peers[peerId].audioEl;
-    if (!audio) { audio = new Audio(); audio.autoplay = true; document.body.appendChild(audio); peers[peerId].audioEl = audio; }
+    if (!audio) {
+      audio = new Audio();
+      audio.autoplay = true;
+      document.body.appendChild(audio);
+      peers[peerId].audioEl = audio;
+    }
     audio.srcObject = e.streams[0];
     if (isDeafened) audio.muted = true;
+    // Применяем выбранный аудио-выход если браузер поддерживает setSinkId
+    if (window._selectedOutputId && audio.setSinkId) {
+      audio.setSinkId(window._selectedOutputId).catch(() => {});
+    }
   };
   if (isInitiator) {
     const offer = await pc.createOffer();
@@ -535,22 +735,147 @@ function pttStop() {
   document.getElementById('status-dot').classList.remove('speaking');
   ws.send(JSON.stringify({ type: 'speaking', active: false }));
 }
-document.addEventListener('keydown', e => { if (e.code === 'Space' && mode === 'ptt' && !e.repeat && document.activeElement !== document.getElementById('chat-input')) { e.preventDefault(); pttStart(); } });
-document.addEventListener('keyup', e => { if (e.code === 'Space' && mode === 'ptt') { e.preventDefault(); pttStop(); } });
+// ======================== PTT HOTKEY ========================
+let pttHotkey = { code: 'Space', label: 'Пробел' };
+let hotkeyListening = false;
 
-// ======================== LEAVE ========================
-function leaveRoom() {
-  ws.send(JSON.stringify({ type: 'leave-room' }));
+function startHotkeyListen() {
+  hotkeyListening = true;
+  const badge = document.getElementById('ptt-hotkey-badge');
+  badge.classList.add('listening');
+  badge.textContent = '...нажми клавишу';
+}
+
+function stopHotkeyListen() {
+  hotkeyListening = false;
+  const badge = document.getElementById('ptt-hotkey-badge');
+  badge.classList.remove('listening');
+}
+
+function formatKeyLabel(e) {
+  if (e.code === 'Space') return 'Пробел';
+  if (e.code.startsWith('Key')) return e.key.toUpperCase();
+  if (e.code.startsWith('Digit')) return e.key;
+  if (e.code.startsWith('Mouse')) return 'Мышь ' + e.button;
+  return e.key || e.code;
+}
+
+document.addEventListener('keydown', e => {
+  if (hotkeyListening) {
+    e.preventDefault();
+    pttHotkey = { code: e.code, label: formatKeyLabel(e) };
+    document.getElementById('ptt-hotkey-badge').textContent = pttHotkey.label;
+    document.getElementById('ptt-btn-label').textContent = 'Держи (' + pttHotkey.label + ')';
+    stopHotkeyListen();
+    return;
+  }
+  if (e.code === pttHotkey.code && mode === 'ptt' && !e.repeat && document.activeElement !== document.getElementById('chat-input')) {
+    e.preventDefault(); pttStart();
+  }
+});
+
+document.addEventListener('keyup', e => {
+  if (e.code === pttHotkey.code && mode === 'ptt') { e.preventDefault(); pttStop(); }
+});
+
+document.addEventListener('click', e => {
+  if (hotkeyListening && e.target.id !== 'ptt-hotkey-badge') stopHotkeyListen();
+});
+
+// ======================== JOIN / LEAVE / DISCONNECT ========================
+async function joinVoiceRoom(roomId) {
+  if (myRoom === roomId) return;
+  if (myRoom) await leaveVoiceRoom(true);
+  if (!localStream) {
+    try { await requestMic(); } catch(e) {
+      addSystemMsg('⚠ Нет доступа к микрофону: ' + e.message); return;
+    }
+  }
+  ws.send(JSON.stringify({ type: 'join', room: roomId, name: myName }));
+}
+
+function leaveVoiceRoom(silent = false) {
+  if (!myRoom) return;
+  if (!silent) ws.send(JSON.stringify({ type: 'leave-room' }));
   Object.values(peers).forEach(p => { if (p.pc) p.pc.close(); if (p.audioEl) p.audioEl.remove(); });
   peers = {};
   if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
-  if (volInterval) clearInterval(volInterval);
-  if (audioCtx) audioCtx.close();
-  ws.close(); ws = null;
-  chatMessages = []; lastMsgSender = null;
+  if (volInterval) { clearInterval(volInterval); volInterval = null; }
+  if (audioCtx) { audioCtx.close(); audioCtx = null; analyser = null; }
+  isMuted = false; isDeafened = false; isSpeaking = false; pttActive = false;
+  document.getElementById('btn-mic').classList.remove('muted');
+  document.getElementById('mic-label').textContent = 'микрофон';
+  document.getElementById('btn-deafen').classList.remove('muted');
+  document.getElementById('deaf-label').textContent = 'наушники';
+  document.getElementById('status-dot').classList.remove('speaking');
+  document.getElementById('voice-controls-area').style.display = 'none';
+  document.getElementById('my-vol-fill').style.width = '0%';
+  myRoom = '';
+  renderChannels();
+}
+
+function disconnectServer() {
+  leaveVoiceRoom(true);
+  if (ws) { ws.close(); ws = null; }
+  onlineUsers = {}; serverRooms = []; peers = {};
+  lastMsgSender = null;
   document.getElementById('chat-messages').innerHTML = '';
   document.getElementById('app-chat').style.display = 'none';
   document.getElementById('app-connect').style.display = 'block';
+}
+
+// ======================== RENDER SIDEBAR ========================
+function renderOnlineList(list) {
+  if (list) {
+    onlineUsers = {};
+    list.forEach(u => { onlineUsers[u.id] = u.name; });
+  }
+  const el = document.getElementById('online-list');
+  const users = Object.entries(onlineUsers);
+  document.getElementById('online-count').textContent = users.length;
+  el.innerHTML = users.map(([id, name]) => {
+    const initials = (name || '?').slice(0, 2).toUpperCase();
+    return `<div class="online-item">
+      <div class="online-avatar" style="background:${nameColor(name)}">${initials}</div>
+      <div class="online-name">${escHtml(name)}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderChannels(rooms) {
+  if (rooms) serverRooms = rooms;
+  const el = document.getElementById('channels-list');
+  const DEFAULT = ['main', 'gaming'];
+  const activeIds = serverRooms.map(r => r.id);
+  const allIds = [...new Set([...DEFAULT, ...activeIds])];
+
+  el.innerHTML = allIds.map(id => {
+    const room = serverRooms.find(r => r.id === id);
+    const members = room ? room.members : [];
+    const isActive = myRoom === id;
+    const memberHtml = members.map(m => {
+      const sp = peers[m.id] && peers[m.id].speaking;
+      return `<div class="ch-member ${sp ? 'speaking' : ''}" id="chm-${m.id}">
+        <div class="ch-member-dot"></div>${escHtml(m.name)}
+      </div>`;
+    }).join('');
+    return `<div class="channel-item">
+      <div class="channel-row ${isActive ? 'active' : ''}" onclick="joinVoiceRoom('${id}')">
+        <span class="ch-icon">🔊</span>
+        <span class="ch-name">${escHtml(id)}</span>
+        ${members.length ? `<span class="ch-badge">${members.length}</span>` : ''}
+      </div>
+      ${memberHtml ? `<div class="ch-members">${memberHtml}</div>` : ''}
+    </div>`;
+  }).join('') + `<div class="ch-new-row" onclick="promptNewChannel()">
+    <span class="ch-new-icon">＋</span>
+    <span class="ch-new-label">Новый канал</span>
+  </div>`;
+}
+
+function promptNewChannel() {
+  const name = prompt('Название канала:');
+  if (name && name.trim()) joinVoiceRoom(name.trim().toLowerCase().replace(/\s+/g, '-'));
 }
 
 // ======================== TEXT CHAT ========================
@@ -648,18 +973,21 @@ function renderPeers() {
 }
 
 function updatePeerSpeaking(id, active) {
+  // Update peer row (volume slider panel)
   const row = document.getElementById('peer-' + id);
-  if (!row) return;
-  row.classList.toggle('speaking', active);
-  const sub = row.querySelector('.peer-sub');
-  if (sub) sub.textContent = active ? '🎙 говорит' : 'молчит';
-  const pvol = document.getElementById('pvol-' + id);
-  if (pvol) {
-    pvol.querySelectorAll('.vol-bar').forEach((b, i) => {
+  if (row) {
+    row.classList.toggle('speaking', active);
+    const sub = row.querySelector('.peer-sub');
+    if (sub) sub.textContent = active ? '🎙 говорит' : 'молчит';
+    const pvol = document.getElementById('pvol-' + id);
+    if (pvol) pvol.querySelectorAll('.vol-bar').forEach((b, i) => {
       b.style.height = (active ? [4,7,10,7,4][i] : 3) + 'px';
       b.style.background = active ? 'var(--green)' : 'var(--border2)';
     });
   }
+  // Update speaking dot in channel list
+  const dot = document.getElementById('chm-' + id);
+  if (dot) dot.classList.toggle('speaking', active);
 }
 
 function setPeerVolume(id, value, container) {
@@ -851,6 +1179,63 @@ function closeScreenViewer() {
 }
 
 function escHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// ======================== EMOJI PICKER ========================
+const EMOJI_CATS = [
+  { icon: '😊', label: 'Смайлики', emojis: ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩','😘','😗','😚','😙','🥲','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐','🤨','😐','😑','😶','😏','😒','🙄','😬','🤥','😌','😔','😪','🤤','😴','😷','🤒','🤕','🤢','🤮','🤧','🥵','🥶','🥴','😵','🤯','🤠','🥳','🥸','😎','🤓','🧐','😕','😟','🙁','☹️','😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥','😢','😭','😱','😖','😣','😞','😓','😩','😫','🥱','😤','😡','😠','🤬','😈','👿','💀','☠️','💩','🤡','👹','👺','👻','👽','👾','🤖'] },
+  { icon: '👋', label: 'Жесты', emojis: ['👋','🤚','🖐','✋','🖖','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','🖕','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','👐','🤲','🤝','🙏','✍️','💅','🤳','💪','🦾','🦿','🦵','🦶','👂','🦻','👃','🧠','🫀','🫁','🦷','🦴','👀','👁','👅','👄','💋','🩸'] },
+  { icon: '🐶', label: 'Животные', emojis: ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐔','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🐛','🦋','🐌','🐞','🐜','🦟','🦗','🦂','🐢','🐍','🦎','🦖','🦕','🐙','🦑','🦐','🦞','🦀','🐡','🐠','🐟','🐬','🐳','🐋','🦈','🐊','🐅','🐆','🦓','🦍','🦧','🦣','🐘','🦛','🦏','🐪','🐫','🦒','🦘','🦬','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🦮','🐕‍🦺','🐈','🐈‍⬛','🪶','🐓','🦃','🦤','🦚','🦜','🦢','🦩','🕊','🐇','🦝','🦨','🦡','🦫','🦦','🦥','🐁','🐀','🐿','🦔'] },
+  { icon: '🍕', label: 'Еда', emojis: ['🍏','🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍈','🍒','🍑','🥭','🍍','🥥','🥝','🍅','🍆','🥑','🫒','🥦','🥬','🥒','🌶','🫑','🧄','🧅','🥔','🍠','🫘','🌰','🥜','🍞','🥐','🥖','🫓','🥨','🥯','🧀','🥚','🍳','🧈','🥞','🧇','🥓','🥩','🍗','🍖','🦴','🌭','🍔','🍟','🍕','🫔','🌮','🌯','🥙','🧆','🥚','🍲','🫕','🥣','🥗','🍿','🧂','🥫','🍱','🍘','🍙','🍚','🍛','🍜','🍝','🍠','🍢','🍣','🍤','🍥','🥮','🍡','🥟','🥠','🥡','🦀','🦞','🦐','🦑','🦪','🍦','🍧','🍨','🍩','🍪','🎂','🍰','🧁','🥧','🍫','🍬','🍭','🍮','🍯','🍼','🥛','☕','🫖','🍵','🧃','🥤','🧋','🍶','🍺','🍻','🥂','🍷','🥃','🍸','🍹','🧉','🍾'] },
+  { icon: '⚽', label: 'Активности', emojis: ['⚽','🏀','🏈','⚾','🥎','🎾','🏐','🏉','🥏','🎱','🪀','🏓','🏸','🏒','🏑','🥍','🏏','🪃','🥅','⛳','🪁','🎣','🤿','🎽','🎿','🛷','🥌','🎯','🪃','🎱','🎮','🕹','🎲','♟','🎭','🎨','🖼','🎰','🚂','🚃','🚄','🚅','🚆','🚇','🚈','🚉','🚊','🚝','🚞','🚋','🚌','🚍','🚎','🚐','🚑','🚒','🚓','🚔','🚕','🚖','🚗','🚘','🚙','🛻','🚚','🚛','🚜','🏎','🏍'] },
+  { icon: '💡', label: 'Предметы', emojis: ['⌚','📱','💻','⌨️','🖥','🖨','🖱','🖲','💽','💾','💿','📀','📷','📸','📹','🎥','📽','🎞','📞','☎️','📟','📠','📺','📻','🧭','⏱','⏲','⏰','🕰','⌛','⏳','📡','🔋','🪫','🔌','💡','🔦','🕯','🪔','🧯','🛢','💸','💵','💴','💶','💷','💰','💳','🪙','💎','⚖️','🦯','🔧','🪛','🔨','⚒','🛠','⛏','🪚','🔩','🪤','🧱','🪜','🧲','🪜','🔑','🗝','🔐','🔏','🔒','🔓','🚪','🪞','🪟','🛋','🪑','🚽','🚿','🛁','🪠','🧴','🧷','🧹','🧺','🧻','🧼','🫧','🪣','🧽','🪥','🛒','🚬','⚰️','🪦','⚱️','🗺','🧿','🪬','💈'] },
+  { icon: '❤️', label: 'Символы', emojis: ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❤️‍🔥','❤️‍🩹','❣️','💕','💞','💓','💗','💖','💘','💝','💟','☮️','✝️','☪️','🕉','☸️','✡️','🔯','🕎','☯️','☦️','🛐','⛎','♈','♉','♊','♋','♌','♍','♎','♏','♐','♑','♒','♓','🆔','⚛️','🉑','☢️','☣️','📴','📳','🈶','🈚','🈸','🈺','🈷️','✴️','🆚','💮','🉐','㊙️','㊗️','🈴','🈵','🈹','🈲','🅰️','🅱️','🆎','🆑','🅾️','🆘','❌','⭕','🛑','⛔','📛','🚫','💯','💢','♨️','🚷','🚯','🚳','🚱','🔞','📵','🔕','🔇','✅','☑️','✔️','❎','🔀','🔁','🔂','▶️','⏩','⏭','⏯','◀️','⏪','⏮','🔼','⏫','🔽','⏬','⏸','⏹','⏺','🎦','🔅','🔆','📶','📳','🔱','📛','🔰','⭕','✅','❌','❎','💠','Ⓜ️','🌀','💤','🏧','🚾','♿','🅿️','🛗','🈳','🈹','🚺','🚹','🚼','⚧','🚻','🚮','🎦','📵','🔞','🔃','🔄','🔙','🔚','🔛','🔜','🔝','🛐','⚗️','🔭','🔬','🕳','💈'] },
+];
+
+let emojiCatIndex = 0;
+
+function buildEmojiPicker() {
+  const catsEl = document.getElementById('emoji-cats');
+  const gridEl = document.getElementById('emoji-grid');
+  catsEl.innerHTML = EMOJI_CATS.map((c, i) =>
+    `<button class="emoji-cat-btn ${i === 0 ? 'active' : ''}" title="${c.label}" onclick="switchEmojiCat(${i})">${c.icon}</button>`
+  ).join('');
+  renderEmojiGrid(0);
+}
+
+function switchEmojiCat(i) {
+  emojiCatIndex = i;
+  document.querySelectorAll('.emoji-cat-btn').forEach((b, j) => b.classList.toggle('active', i === j));
+  renderEmojiGrid(i);
+}
+
+function renderEmojiGrid(i) {
+  document.getElementById('emoji-grid').innerHTML = EMOJI_CATS[i].emojis
+    .map(e => `<div class="emoji-item" onclick="insertEmoji('${e}')">${e}</div>`)
+    .join('');
+}
+
+function insertEmoji(emoji) {
+  const inp = document.getElementById('chat-input');
+  const start = inp.selectionStart, end = inp.selectionEnd;
+  inp.value = inp.value.slice(0, start) + emoji + inp.value.slice(end);
+  inp.selectionStart = inp.selectionEnd = start + emoji.length;
+  inp.focus();
+  inp.dispatchEvent(new Event('input'));
+}
+
+function toggleEmojiPicker() {
+  const picker = document.getElementById('emoji-picker');
+  const isOpen = picker.classList.toggle('open');
+  if (isOpen) buildEmojiPicker();
+}
+
+document.addEventListener('click', e => {
+  const picker = document.getElementById('emoji-picker');
+  const btn = document.getElementById('emoji-btn');
+  if (picker && picker.classList.contains('open') && !picker.contains(e.target) && e.target !== btn) {
+    picker.classList.remove('open');
+  }
+});
 </script>
   <!-- SCREEN VIEWER OVERLAY -->
   <div class="screen-viewer" id="screen-viewer">
