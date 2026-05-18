@@ -564,6 +564,7 @@ async function onMessage(e) {
   if (msg.type === 'peer-joined') {
     peers[msg.peerId] = { name: msg.name, speaking: false };
     await createPeerConnection(msg.peerId, false);
+    playSound('join');
     addSystemMsg(msg.name + ' вошёл в канал');
     renderPeers();
     renderChannels();
@@ -571,6 +572,7 @@ async function onMessage(e) {
 
   if (msg.type === 'peer-left') {
     if (peers[msg.peerId]) {
+      playSound('leave');
       addSystemMsg((peers[msg.peerId].name || 'Кто-то') + ' покинул канал');
       if (peers[msg.peerId].pc) peers[msg.peerId].pc.close();
       if (peers[msg.peerId].audioEl) peers[msg.peerId].audioEl.remove();
