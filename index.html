@@ -848,7 +848,11 @@ function leaveVoiceRoom(silent = false) {
   document.getElementById('status-dot').classList.remove('speaking');
   document.getElementById('voice-controls-area').style.display = 'none';
   document.getElementById('my-vol-fill').style.width = '0%';
+  const leftRoom = myRoom;
   myRoom = '';
+  serverRooms = serverRooms.map(r =>
+    r.id === leftRoom ? { ...r, members: r.members.filter(m => m.id !== myId) } : r
+  );
   renderChannels();
 }
 
@@ -977,7 +981,9 @@ function addSystemMsg(text) {
 }
 
 function nameColor(name) {
-  const colors = ['#2d3a6b','#1a4a35','#3a1a1a','#2a1a4a','#1a3a3a','#3a2a1a'];
+  const night = ['#2d3a6b','#1a4a35','#3a1a1a','#2a1a4a','#1a3a3a','#3a2a1a'];
+  const day   = ['#e8c070','#e0a080','#d4b060','#c8b488','#e09878','#d0a050'];
+  const colors = document.documentElement.getAttribute('data-theme') === 'day' ? day : night;
   let h = 0;
   for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
   return colors[Math.abs(h) % colors.length];
@@ -1348,6 +1354,8 @@ function applyTheme(theme) {
   const icon = theme === 'day' ? '🌙' : '☀️';
   document.querySelectorAll('.theme-toggle').forEach(b => b.textContent = icon);
   localStorage.setItem('lv-theme', theme);
+  renderOnlineList();
+  renderPeers();
 }
 
 function toggleTheme() {
