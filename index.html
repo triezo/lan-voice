@@ -384,7 +384,6 @@
           <span id="status-text">онлайн</span>
         </div>
         <button class="theme-toggle" id="theme-toggle-chat" onclick="toggleTheme()" title="Переключить тему"></button>
-        <button class="theme-toggle danger" onclick="disconnectServer()" title="Отключиться от сервера">⏻</button>
       </div>
     </div>
 
@@ -462,6 +461,7 @@
     <div class="chat-header">
       <span id="chat-room-label">#main</span>
       · текстовый чат
+      <button class="theme-toggle danger" style="margin-left:auto" onclick="disconnectServer()" title="Отключиться от сервера">⏻</button>
     </div>
     <div class="chat-messages" id="chat-messages"></div>
     <div class="chat-input-area">
