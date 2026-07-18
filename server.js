@@ -111,24 +111,37 @@ function getOnlineList() {
 
 let nextId = 1;
 
+// имена и комнаты приходят от клиентов — обрезаем и чистим управляющие символы
+function cleanName(s, max) {
+  return String(s || '').replace(/[\u0000-\u001F\u007F]/g, '').trim().slice(0, max);
+}
+function cleanRoomId(s) {
+  return String(s || '').trim().toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^\p{L}\p{N}\-_]/gu, '')
+    .slice(0, 24);
+}
+
 wss.on('connection', (ws) => {
   const clientId = String(nextId++);
   clients.set(clientId, ws);
   let currentRoom = null;
+  ws.isAlive = true;
+  ws.on('pong', () => { ws.isAlive = true; });
 
   ws.on('message', (raw) => {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
 
     if (msg.type === 'hello') {
-      clientNames.set(clientId, msg.name || 'Аноним');
+      clientNames.set(clientId, cleanName(msg.name, 20) || 'Аноним');
       ws.send(JSON.stringify({ type: 'server-hello', id: clientId, rooms: getRoomState(), online: getOnlineList(), history: chatHistory }));
       broadcastAll({ type: 'user-online', id: clientId, name: msg.name || 'Аноним' }, clientId);
       console.log(`${msg.name || clientId} подключился к серверу`);
     }
 
     if (msg.type === 'join') {
-      const roomId = msg.room || 'main';
+      const roomId = cleanRoomId(msg.room) || 'main';
       currentRoom = roomId;
       if (!rooms[roomId]) rooms[roomId] = new Set();
       const existingPeers = [...rooms[roomId]].map(id => ({ id, name: clientNames.get(id) || 'Аноним' }));
@@ -195,6 +208,17 @@ wss.on('connection', (ws) => {
     console.log(`${name} отключился`);
   });
 });
+
+// Heartbeat: раз в 30с пингуем всех; кто не ответил — обрываем,
+// иначе «призраки» после обрыва сети висят в списке до TCP-таймаута
+const heartbeat = setInterval(() => {
+  wss.clients.forEach(ws => {
+    if (!ws.isAlive) return ws.terminate();
+    ws.isAlive = false;
+    ws.ping();
+  });
+}, 30000);
+wss.on('close', () => clearInterval(heartbeat));
 
 server.listen(PORT, '0.0.0.0', () => {
   const { networkInterfaces } = require('os');

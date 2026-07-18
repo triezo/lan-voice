@@ -49,6 +49,15 @@
   .field input:focus, .field select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
   .field input::placeholder { color: var(--text3); }
   .field select option { background: var(--surface2); color: var(--text); }
+  .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .field-grid select { text-overflow: ellipsis; }
+  .host-row { display: flex; gap: 6px; }
+  .host-row input { flex: 1; min-width: 0; }
+  .host-find-btn { width: 38px; flex-shrink: 0; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text2); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .host-find-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .host-find-btn.searching { border-color: var(--accent); color: var(--accent); animation: blink 1s infinite; }
+  .host-find-btn.found { border-color: var(--green); color: var(--green); }
+  .host-find-btn.notfound { border-color: var(--red); color: var(--red); }
   .btn {
     display: block; width: 100%; padding: 11px;
     background: linear-gradient(180deg, var(--accent), var(--accent2));
@@ -134,6 +143,9 @@
   .ch-new-row:hover { background: var(--surface2); }
   .ch-new-icon { font-size: 13px; opacity: 0.4; }
   .ch-new-label { font-size: 11px; color: var(--text3); }
+  .ch-new-input-row { display: flex; align-items: center; gap: 6px; padding: 3px 8px; }
+  .ch-new-input { flex: 1; min-width: 0; background: var(--surface2); border: 1px solid var(--accent); border-radius: 6px; padding: 4px 8px; font-family: var(--mono); font-size: 11px; color: var(--text); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent); }
+  .ch-new-input::placeholder { color: var(--text3); }
 
   /* Peer rows (inside voice channel while connected) */
   .peer-row { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; background: var(--surface2); border-radius: 9px; border: 1px solid var(--border); transition: border-color 0.2s, box-shadow 0.2s; }
@@ -355,9 +367,19 @@
   <div class="panel">
     <div class="panel-label">Подключение</div>
     <div class="field"><label>Твоё имя</label><input id="inp-name" type="text" placeholder="Например: Бека" maxlength="20" autocomplete="off"/></div>
-    <div class="field"><label>IP хоста <span style="color:var(--text3)">(кто запустил server.js)</span></label><input id="inp-host" type="text" placeholder="192.168.1.xx или localhost" autocomplete="off"/></div>
-    <div class="field"><label>Микрофон</label><select id="inp-mic"><option value="">— загрузка... —</option></select></div>
-    <div class="field"><label>Наушники / динамики</label><select id="inp-output"><option value="">— загрузка... —</option></select></div>
+    <div class="field">
+      <label>IP хоста <span style="color:var(--text3)">(кто запустил server.js)</span></label>
+      <div class="host-row">
+        <input id="inp-host" type="text" placeholder="192.168.1.xx или localhost" autocomplete="off"/>
+        <button class="host-find-btn" id="btn-discover" onclick="discoverServer()" title="Найти сервер в сети автоматически" style="display:none">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="field-grid">
+      <div class="field"><label>Микрофон</label><select id="inp-mic"><option value="">—</option></select></div>
+      <div class="field"><label>Динамики</label><select id="inp-output"><option value="">—</option></select></div>
+    </div>
     <button class="btn" id="btn-connect">Подключиться</button>
     <div class="err" id="conn-err"></div>
   </div>
@@ -507,30 +529,35 @@ document.getElementById('btn-connect').onclick = connect;
 async function discoverServer() {
   if (!window.electronAPI) return;
   const btn = document.getElementById('btn-discover');
+  const host = document.getElementById('inp-host');
+  btn.classList.remove('found', 'notfound');
   btn.classList.add('searching');
-  btn.textContent = '🔍 Ищу сервер...';
+  const oldPlaceholder = host.placeholder;
+  host.placeholder = 'ищу сервер в сети...';
   try {
     const result = await window.electronAPI.discoverServer();
+    btn.classList.remove('searching');
     if (result && result.ips && result.ips.length > 0) {
-      document.getElementById('inp-host').value = result.ips[0] + ':' + result.port;
-      btn.classList.remove('searching');
-      btn.innerHTML = '✅ Найден: ' + result.ips[0];
-      btn.style.color = 'var(--green)';
-      btn.style.borderColor = 'var(--green)';
+      host.value = result.ips[0] + ':' + result.port;
+      host.placeholder = oldPlaceholder;
+      btn.classList.add('found');
     } else {
-      btn.classList.remove('searching');
-      btn.innerHTML = '❌ Не найден — введи IP вручную';
-      btn.style.color = 'var(--red)';
-      setTimeout(() => {
-        btn.style.color = ''; btn.style.borderColor = '';
-        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Найти сервер в сети';
-      }, 3000);
+      btn.classList.add('notfound');
+      host.placeholder = 'не найден — введи IP вручную';
+      setTimeout(() => { btn.classList.remove('notfound'); host.placeholder = oldPlaceholder; }, 3000);
     }
   } catch(e) {
     btn.classList.remove('searching');
-    btn.textContent = 'Найти сервер в сети';
+    host.placeholder = oldPlaceholder;
   }
 }
+
+// кнопка автопоиска работает только в Electron (браузеру недоступен UDP)
+if (window.electronAPI) document.getElementById('btn-discover').style.display = 'flex';
+
+// запоминаем имя и адрес между запусками
+document.getElementById('inp-name').value = localStorage.getItem('lv-name') || '';
+document.getElementById('inp-host').value = localStorage.getItem('lv-host') || '';
 
 // ======================== RECONNECT ========================
 let lastHost = '';        // куда подключались (для реконнекта)
@@ -545,6 +572,8 @@ async function connect() {
   host = host.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
   if (!host.includes(':')) host += ':3000';
   document.getElementById('conn-err').textContent = '';
+  localStorage.setItem('lv-name', name);
+  localStorage.setItem('lv-host', document.getElementById('inp-host').value.trim());
   lastHost = host;
   openSocket();
 }
@@ -571,7 +600,7 @@ function openSocket() {
 }
 
 function cleanupAfterDrop() {
-  Object.values(peers).forEach(p => { if (p.pc) p.pc.close(); if (p.audioEl) p.audioEl.remove(); });
+  Object.values(peers).forEach(p => { if (p.pc) p.pc.close(); cleanupPeerAudio(p); });
   peers = {};
   myRoom = '';
   isSpeaking = false; pttActive = false;
@@ -747,7 +776,7 @@ async function onMessage(e) {
       playSound('leave');
       addSystemMsg((peers[msg.peerId].name || 'Кто-то') + ' покинул канал');
       if (peers[msg.peerId].pc) peers[msg.peerId].pc.close();
-      if (peers[msg.peerId].audioEl) peers[msg.peerId].audioEl.remove();
+      cleanupPeerAudio(peers[msg.peerId]);
       delete peers[msg.peerId];
     }
     if (screenOut[msg.peerId]) { screenOut[msg.peerId].close(); delete screenOut[msg.peerId]; }
@@ -827,6 +856,26 @@ async function onMessage(e) {
   }
 }
 
+// ======================== PLAYBACK (WebAudio) ========================
+// Звук участников идёт через GainNode — так громкость реально бустится выше 100%
+let playbackCtx = null;
+function getPlaybackCtx() {
+  if (!playbackCtx) playbackCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (playbackCtx.state === 'suspended') playbackCtx.resume().catch(() => {});
+  if (window._selectedOutputId && playbackCtx.setSinkId) playbackCtx.setSinkId(window._selectedOutputId).catch(() => {});
+  return playbackCtx;
+}
+
+function peerGainValue(p) {
+  return isDeafened ? 0 : (p.volume !== undefined ? p.volume : 100) / 100;
+}
+
+function cleanupPeerAudio(p) {
+  if (p.srcNode) { try { p.srcNode.disconnect(); } catch {} p.srcNode = null; }
+  if (p.gain) { try { p.gain.disconnect(); } catch {} p.gain = null; }
+  if (p.audioEl) { p.audioEl.remove(); p.audioEl = null; }
+}
+
 // ======================== WebRTC ========================
 async function createPeerConnection(peerId, isInitiator) {
   if (!peers[peerId]) peers[peerId] = { name: '...', speaking: false };
@@ -835,19 +884,26 @@ async function createPeerConnection(peerId, isInitiator) {
   localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
   pc.onicecandidate = (e) => { if (e.candidate) ws.send(JSON.stringify({ type: 'signal', target: peerId, signal: e.candidate })); };
   pc.ontrack = (e) => {
-    let audio = peers[peerId].audioEl;
+    const stream = e.streams[0];
+    const p = peers[peerId];
+    // скрытый <audio> (muted) обязателен: без него Chrome не отдаёт WebRTC-звук в WebAudio
+    let audio = p.audioEl;
     if (!audio) {
       audio = new Audio();
       audio.autoplay = true;
+      audio.muted = true;
       document.body.appendChild(audio);
-      peers[peerId].audioEl = audio;
+      p.audioEl = audio;
     }
-    audio.srcObject = e.streams[0];
-    if (isDeafened) audio.muted = true;
-    // Применяем выбранный аудио-выход если браузер поддерживает setSinkId
-    if (window._selectedOutputId && audio.setSinkId) {
-      audio.setSinkId(window._selectedOutputId).catch(() => {});
-    }
+    audio.srcObject = stream;
+    const ctx = getPlaybackCtx();
+    if (p.srcNode) { try { p.srcNode.disconnect(); } catch {} }
+    if (p.gain) { try { p.gain.disconnect(); } catch {} }
+    p.srcNode = ctx.createMediaStreamSource(stream);
+    p.gain = ctx.createGain();
+    p.gain.gain.value = peerGainValue(p);
+    p.srcNode.connect(p.gain);
+    p.gain.connect(ctx.destination);
   };
   if (isInitiator) {
     const offer = await pc.createOffer();
@@ -904,7 +960,7 @@ function toggleMic() {
 
 function toggleDeafen() {
   isDeafened = !isDeafened;
-  Object.values(peers).forEach(p => { if (p.audioEl) p.audioEl.muted = isDeafened; });
+  Object.values(peers).forEach(p => { if (p.gain) p.gain.gain.value = peerGainValue(p); });
   document.getElementById('btn-deafen').classList.toggle('muted', isDeafened);
   document.getElementById('deaf-label').textContent = isDeafened ? 'глухой' : 'наушники';
 }
@@ -1090,7 +1146,8 @@ document.addEventListener('click', e => {
 
 // ======================== JOIN / LEAVE / DISCONNECT ========================
 async function joinVoiceRoom(roomId) {
-  if (myRoom === roomId) return;
+  roomId = sanitizeRoomId(roomId);
+  if (!roomId || myRoom === roomId) return;
   if (myRoom) leaveVoiceRoom(false);
   if (!localStream) {
     try { await requestMic(); } catch(e) {
@@ -1105,7 +1162,7 @@ function leaveVoiceRoom(silent = false) {
   if (isSharing) stopScreenShare();
   closeAllScreenViewers();
   if (!silent) { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'leave-room' })); playSound('leave'); }
-  Object.values(peers).forEach(p => { if (p.pc) p.pc.close(); if (p.audioEl) p.audioEl.remove(); });
+  Object.values(peers).forEach(p => { if (p.pc) p.pc.close(); cleanupPeerAudio(p); });
   peers = {};
   if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
   if (volInterval) { clearInterval(volInterval); volInterval = null; }
@@ -1159,12 +1216,33 @@ function renderOnlineList(list) {
   }).join('');
 }
 
+// имя комнаты попадает в разметку и на сервер — режем всё лишнее
+function sanitizeRoomId(s) {
+  return String(s || '').trim().toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^\p{L}\p{N}\-_]/gu, '')
+    .slice(0, 24);
+}
+
+let channelInputOpen = false;
+let channelInputValue = ''; // переживает перерисовку списка (rooms-update может прийти во время ввода)
+
 function renderChannels(rooms) {
   if (rooms) serverRooms = rooms;
   const el = document.getElementById('channels-list');
   const DEFAULT = ['main', 'gaming'];
   const activeIds = serverRooms.map(r => r.id);
   const allIds = [...new Set([...DEFAULT, ...activeIds])];
+
+  const newRow = channelInputOpen
+    ? `<div class="ch-new-input-row">
+        <span class="ch-new-icon">＋</span>
+        <input class="ch-new-input" id="ch-new-input" type="text" placeholder="имя канала" maxlength="24" autocomplete="off">
+      </div>`
+    : `<div class="ch-new-row" id="ch-new-row">
+        <span class="ch-new-icon">＋</span>
+        <span class="ch-new-label">Новый канал</span>
+      </div>`;
 
   el.innerHTML = allIds.map(id => {
     const room = serverRooms.find(r => r.id === id);
@@ -1177,22 +1255,43 @@ function renderChannels(rooms) {
       </div>`;
     }).join('');
     return `<div class="channel-item">
-      <div class="channel-row ${isActive ? 'active' : ''}" onclick="joinVoiceRoom('${id}')">
+      <div class="channel-row ${isActive ? 'active' : ''}" data-room="${escHtml(id)}">
         <span class="ch-icon">🔊</span>
         <span class="ch-name">${escHtml(id)}</span>
         ${members.length ? `<span class="ch-badge">${members.length}</span>` : ''}
       </div>
       ${memberHtml ? `<div class="ch-members">${memberHtml}</div>` : ''}
     </div>`;
-  }).join('') + `<div class="ch-new-row" onclick="promptNewChannel()">
-    <span class="ch-new-icon">＋</span>
-    <span class="ch-new-label">Новый канал</span>
-  </div>`;
-}
+  }).join('') + newRow;
 
-function promptNewChannel() {
-  const name = prompt('Название канала:');
-  if (name && name.trim()) joinVoiceRoom(name.trim().toLowerCase().replace(/\s+/g, '-'));
+  // обработчики без инлайн-onclick — имя комнаты не может исполнить код
+  el.querySelectorAll('.channel-row').forEach(row => {
+    row.onclick = () => joinVoiceRoom(row.dataset.room);
+  });
+  const newRowEl = document.getElementById('ch-new-row');
+  if (newRowEl) newRowEl.onclick = () => { channelInputOpen = true; renderChannels(); };
+  const inp = document.getElementById('ch-new-input');
+  if (inp) {
+    inp.value = channelInputValue;
+    inp.focus();
+    inp.setSelectionRange(inp.value.length, inp.value.length);
+    inp.oninput = () => { channelInputValue = inp.value; };
+    inp.onkeydown = (e) => {
+      if (e.key === 'Enter') {
+        const id = sanitizeRoomId(inp.value);
+        channelInputOpen = false; channelInputValue = '';
+        if (id) joinVoiceRoom(id); else renderChannels();
+      } else if (e.key === 'Escape') {
+        channelInputOpen = false; channelInputValue = '';
+        renderChannels();
+      }
+    };
+    inp.onblur = () => {
+      if (!channelInputOpen) return;
+      channelInputOpen = false; channelInputValue = '';
+      renderChannels();
+    };
+  }
 }
 
 // ======================== TEXT CHAT ========================
@@ -1312,7 +1411,7 @@ function updatePeerSpeaking(id, active) {
 function setPeerVolume(id, value, container) {
   const vol = parseInt(value);
   peers[id].volume = vol;
-  if (peers[id].audioEl) peers[id].audioEl.volume = Math.min(1, vol / 100);
+  if (peers[id].gain) peers[id].gain.gain.value = peerGainValue(peers[id]);
   if (container) {
     const pct = container.querySelector('.vol-pct');
     const icon = container.querySelector('.vol-icon');
@@ -1347,12 +1446,16 @@ async function showSourcePicker() {
   const sources = await window.electronAPI.getSources();
   const grid = document.getElementById('source-grid');
   grid.innerHTML = sources.map(s => `
-    <div class="source-item" data-id="${s.id}" onclick="selectSource(this, '${s.id}')">
-      <img src="${s.thumbnail}" alt="${s.name}"/>
-      <div class="source-item-name">${s.name}</div>
+    <div class="source-item" data-id="${escHtml(s.id)}">
+      <img src="${escHtml(s.thumbnail)}" alt="${escHtml(s.name)}"/>
+      <div class="source-item-name">${escHtml(s.name)}</div>
     </div>`).join('');
+  grid.querySelectorAll('.source-item').forEach(item => {
+    item.onclick = () => selectSource(item, item.dataset.id);
+  });
   selectedSourceId = sources[0] ? sources[0].id : null;
-  if (grid.firstChild) grid.firstChild.classList.add('selected');
+  const firstItem = grid.querySelector('.source-item');
+  if (firstItem) firstItem.classList.add('selected');
   document.getElementById('source-picker').classList.add('active');
   return new Promise(resolve => { window._sourcePickerResolve = resolve; });
 }
