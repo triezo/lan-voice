@@ -47,6 +47,34 @@ let tray = null;
 let serverProcess = null;
 let serverReady = false;
 
+// ======================== GLOBAL INPUT (PTT в фоне) ========================
+// uiohook-napi даёт глобальные события клавиатуры/мыши даже когда окно не в фокусе.
+// Если модуль не установлен — PTT работает только при фокусе окна (как раньше).
+let uIOhook = null;
+try { uIOhook = require('uiohook-napi').uIOhook; } catch (e) {
+  console.log('[global-input] uiohook-napi не установлен — глобальный PTT недоступен');
+}
+
+function startGlobalInput() {
+  if (!uIOhook) return;
+  const fwd = (payload) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('global-input', payload);
+    }
+  };
+  uIOhook.on('keydown',   e => fwd({ event: 'keydown',   keycode: e.keycode }));
+  uIOhook.on('keyup',     e => fwd({ event: 'keyup',     keycode: e.keycode }));
+  uIOhook.on('mousedown', e => fwd({ event: 'mousedown', button: e.button }));
+  uIOhook.on('mouseup',   e => fwd({ event: 'mouseup',   button: e.button }));
+  try {
+    uIOhook.start();
+    console.log('[global-input] глобальный перехват клавиш активен');
+  } catch (e) {
+    console.error('[global-input] не удалось запустить:', e.message);
+    uIOhook = null;
+  }
+}
+
 // ======================== SERVER ========================
 function startServer() {
   const serverPath = path.join(__dirname, 'server.js');
@@ -92,6 +120,7 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       webSecurity: false,
+      backgroundThrottling: false,
       preload: require('path').join(__dirname, 'preload.js'),
     },
     show: false,
@@ -245,6 +274,7 @@ app.whenReady().then(() => {
   startServer();
   createWindow();
   createTray();
+  startGlobalInput();
 
   // Если сервер не поднялся за 5 сек — пробуем грузить
   setTimeout(() => {
@@ -255,6 +285,7 @@ app.whenReady().then(() => {
 });
 
 app.on('before-quit', () => {
+  if (uIOhook) { try { uIOhook.stop(); } catch {} }
   if (serverProcess) serverProcess.kill();
 });
 

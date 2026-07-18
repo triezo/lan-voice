@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LAN Voice</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
     --bg: #0d0d0f; --surface: #141417; --surface2: #1c1c21; --surface3: #242429;
     --border: #2a2a30; --border2: #38383f; --accent: #5b7cf6; --accent2: #3d5ce0;
     --green: #3ddc97; --green-dim: #1a4a35; --red: #f25f5c; --yellow: #f0b429;
-    --text: #e8e8f0; --text2: #8888a0; --text3: #55556a; --mono: 'JetBrains Mono', monospace;
+    --text: #e8e8f0; --text2: #8888a0; --text3: #55556a;
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, 'Courier New', monospace;
   }
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 14px; }
@@ -267,7 +267,8 @@
     --bg: #f2e4c8; --surface: #e8d5b0; --surface2: #ddc99e; --surface3: #cfb98a;
     --border: #c4a86e; --border2: #a88a50; --accent: #b85c00; --accent2: #8a4200;
     --green: #4a7c3f; --green-dim: #c8dfc4; --red: #c0392b; --yellow: #b07800;
-    --text: #1a0c04; --text2: #5a3a18; --text3: #8a6438; --mono: 'JetBrains Mono', monospace;
+    --text: #1a0c04; --text2: #5a3a18; --text3: #8a6438;
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, 'Courier New', monospace;
   }
   [data-theme="day"] body { background: var(--bg); }
   [data-theme="day"] .btn { color: #fff; }
@@ -387,6 +388,11 @@
           </div>
         </div>
         <div class="vol-meter"><div class="vol-meter-fill" id="my-vol-fill"></div></div>
+        <div class="kb-mute-row" id="vox-threshold-row">
+          <span style="font-size:10px;color:var(--text3);white-space:nowrap">🎚 Порог</span>
+          <input class="kb-delay-slider" id="vox-threshold-slider" type="range" min="5" max="60" step="1" value="15" oninput="setVoxThreshold(this.value)">
+          <span class="kb-delay-label" id="vox-threshold-label">15</span>
+        </div>
         <div class="kb-mute-row">
           <button class="kb-mute-btn" id="btn-kb-mute" onclick="toggleKbMute()">⌨ Клав. мут</button>
           <input class="kb-delay-slider" id="kb-delay-slider" type="range" min="100" max="800" step="50" value="400" oninput="kbMuteDelay=+this.value;document.getElementById('kb-delay-label').textContent=this.value+'мс'">
@@ -435,7 +441,7 @@ let isMuted = false, isDeafened = false;
 let mode = 'vox', pttActive = false;
 let audioCtx = null, analyser = null, volInterval = null;
 let isSpeaking = false;
-const VOX_THRESHOLD = 0.015;
+let voxThreshold = parseFloat(localStorage.getItem('lv-vox-threshold')) || 0.015;
 const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
 
 // Chat state
@@ -476,6 +482,12 @@ async function discoverServer() {
   }
 }
 
+// ======================== RECONNECT ========================
+let lastHost = '';        // куда подключались (для реконнекта)
+let shouldReconnect = false; // включается после первого успешного подключения
+let reconnectTimer = null, reconnectAttempt = 0;
+let pendingRoom = '';     // канал, в который вернёмся после реконнекта
+
 async function connect() {
   const name = document.getElementById('inp-name').value.trim() || 'Аноним';
   let host = document.getElementById('inp-host').value.trim() || 'localhost';
@@ -483,14 +495,53 @@ async function connect() {
   host = host.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
   if (!host.includes(':')) host += ':3000';
   document.getElementById('conn-err').textContent = '';
-  ws = new WebSocket(`wss://${host}`);
-  ws.onerror = () => { document.getElementById('conn-err').textContent = '⚠ Не удалось подключиться'; };
-  ws.onopen = () => ws.send(JSON.stringify({ type: 'hello', name }));
+  lastHost = host;
+  openSocket();
+}
+
+function openSocket() {
+  ws = new WebSocket(`wss://${lastHost}`);
+  ws.onerror = () => {
+    if (!shouldReconnect) document.getElementById('conn-err').textContent = '⚠ Не удалось подключиться';
+  };
+  ws.onopen = () => {
+    reconnectAttempt = 0;
+    ws.send(JSON.stringify({ type: 'hello', name: myName }));
+  };
   ws.onmessage = onMessage;
   ws.onclose = () => {
     document.getElementById('status-dot').classList.remove('connected');
     document.getElementById('status-text').textContent = 'отключён';
+    if (!shouldReconnect) return;
+    // связь оборвалась: чистим мёртвые соединения, запоминаем канал и переподключаемся
+    if (myRoom) pendingRoom = myRoom;
+    cleanupAfterDrop();
+    scheduleReconnect();
   };
+}
+
+function cleanupAfterDrop() {
+  Object.values(peers).forEach(p => { if (p.pc) p.pc.close(); if (p.audioEl) p.audioEl.remove(); });
+  peers = {};
+  myRoom = '';
+  isSpeaking = false; pttActive = false;
+  document.getElementById('status-dot').classList.remove('speaking');
+  document.getElementById('voice-controls-area').style.display = 'none';
+  if (isSharing) stopScreenShare(true);
+  closeAllScreenViewers();
+  renderChannels([]);
+}
+
+function wsSend(obj) {
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
+}
+
+function scheduleReconnect() {
+  reconnectAttempt++;
+  const delay = Math.min(10000, 1000 * Math.pow(2, reconnectAttempt - 1));
+  document.getElementById('status-text').textContent = 'переподключение...';
+  clearTimeout(reconnectTimer);
+  reconnectTimer = setTimeout(() => { if (shouldReconnect) openSocket(); }, delay);
 }
 
 async function requestMic() {
@@ -583,11 +634,20 @@ async function onMessage(e) {
 
   if (msg.type === 'server-hello') {
     myId = msg.id;
+    shouldReconnect = true;
     document.getElementById('app-connect').style.display = 'none';
     document.getElementById('app-chat').style.display = 'flex';
     document.getElementById('you-display').textContent = 'ты: ' + myName;
+    document.getElementById('status-dot').classList.add('connected');
+    document.getElementById('status-text').textContent = 'онлайн';
     renderOnlineList(msg.online);
     renderChannels(msg.rooms);
+    // история чата с сервера (и при реконнекте — чтобы не дублировать)
+    document.getElementById('chat-messages').innerHTML = '';
+    lastMsgSender = null;
+    (msg.history || []).forEach(h => addChatMsg(h.peerId, h.name, h.text, h.name === myName, h.ts));
+    // возвращаемся в канал после обрыва связи
+    if (pendingRoom) { const r = pendingRoom; pendingRoom = ''; joinVoiceRoom(r); }
   }
 
   if (msg.type === 'user-online') {
@@ -624,6 +684,8 @@ async function onMessage(e) {
   if (msg.type === 'peer-joined') {
     peers[msg.peerId] = { name: msg.name, speaking: false };
     await createPeerConnection(msg.peerId, false);
+    // если мы показываем экран — отправляем стрим и тому, кто зашёл позже
+    if (isSharing) createScreenPeer(msg.peerId).catch(() => {});
     playSound('join');
     addSystemMsg(msg.name + ' вошёл в канал');
     renderPeers();
@@ -638,6 +700,9 @@ async function onMessage(e) {
       if (peers[msg.peerId].audioEl) peers[msg.peerId].audioEl.remove();
       delete peers[msg.peerId];
     }
+    if (screenOut[msg.peerId]) { screenOut[msg.peerId].close(); delete screenOut[msg.peerId]; }
+    if (screenIn[msg.peerId]) { screenIn[msg.peerId].close(); delete screenIn[msg.peerId]; }
+    closeScreenViewer(msg.peerId);
     renderPeers();
     renderChannels();
   }
@@ -668,39 +733,47 @@ async function onMessage(e) {
   }
 
   if (msg.type === 'screen-stop') {
-    if (screenPeers[msg.peerId]) {
-      screenPeers[msg.peerId].close();
-      delete screenPeers[msg.peerId];
+    if (screenIn[msg.peerId]) {
+      screenIn[msg.peerId].close();
+      delete screenIn[msg.peerId];
     }
-    closeScreenViewer();
+    closeScreenViewer(msg.peerId);
     addSystemMsg((peers[msg.peerId] ? peers[msg.peerId].name : 'Кто-то') + ' остановил показ экрана');
   }
 
   if (msg.type === 'screen-signal') {
     const signal = msg.signal;
-    if (signal.type === 'offer') {
-      // Receiver gets offer — create peer and answer
-      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-      screenPeers[msg.from] = pc;
-      pc.onicecandidate = (e) => {
-        if (e.candidate) ws.send(JSON.stringify({ type: 'screen-signal', target: msg.from, signal: e.candidate }));
-      };
-      pc.ontrack = (e) => {
-        if (e.streams && e.streams[0]) showScreenViewer(msg.from, e.streams[0]);
-      };
-      await pc.setRemoteDescription(new RTCSessionDescription(signal));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      ws.send(JSON.stringify({ type: 'screen-signal', target: msg.from, signal: pc.localDescription }));
-    } else if (signal.type === 'answer') {
-      if (screenPeers[msg.from]) await screenPeers[msg.from].setRemoteDescription(new RTCSessionDescription(signal));
-    } else if (signal.candidate) {
-      if (screenPeers[msg.from]) await screenPeers[msg.from].addIceCandidate(new RTCIceCandidate(signal)).catch(() => {});
+    // role: 'sharer' — сигнал от показывающего (мы зритель), 'viewer' — от зрителя (мы показываем).
+    // Раздельные карты нужны, чтобы двое могли показывать экран друг другу одновременно.
+    const role = msg.role || (signal.type === 'offer' ? 'sharer' : signal.type === 'answer' ? 'viewer' : (screenIn[msg.from] ? 'sharer' : 'viewer'));
+    if (role === 'sharer') {
+      if (signal.type === 'offer') {
+        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+        screenIn[msg.from] = pc;
+        pc.onicecandidate = (e) => {
+          if (e.candidate) ws.send(JSON.stringify({ type: 'screen-signal', target: msg.from, role: 'viewer', signal: e.candidate }));
+        };
+        pc.ontrack = (e) => {
+          if (e.streams && e.streams[0]) showScreenViewer(msg.from, e.streams[0]);
+        };
+        await pc.setRemoteDescription(new RTCSessionDescription(signal));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        ws.send(JSON.stringify({ type: 'screen-signal', target: msg.from, role: 'viewer', signal: pc.localDescription }));
+      } else if (signal.candidate && screenIn[msg.from]) {
+        await screenIn[msg.from].addIceCandidate(new RTCIceCandidate(signal)).catch(() => {});
+      }
+    } else {
+      const pc = screenOut[msg.from];
+      if (pc) {
+        if (signal.type === 'answer') await pc.setRemoteDescription(new RTCSessionDescription(signal));
+        else if (signal.candidate) await pc.addIceCandidate(new RTCIceCandidate(signal)).catch(() => {});
+      }
     }
   }
 
   if (msg.type === 'chat') {
-    addChatMsg(msg.peerId, msg.name, msg.text, false);
+    addChatMsg(msg.peerId, msg.name, msg.text, false, msg.ts);
   }
 }
 
@@ -748,15 +821,27 @@ function setupVolumeAnalyser() {
     rms = Math.sqrt(rms / data.length);
     fill.style.width = Math.min(100, rms * 600) + '%';
     if (mode === 'vox') {
-      const nowSpeaking = rms > VOX_THRESHOLD && !isMuted;
+      const nowSpeaking = rms > voxThreshold && !isMuted;
       if (nowSpeaking !== isSpeaking) {
         isSpeaking = nowSpeaking;
-        ws.send(JSON.stringify({ type: 'speaking', active: isSpeaking }));
+        wsSend({ type: 'speaking', active: isSpeaking });
         document.getElementById('status-dot').classList.toggle('speaking', isSpeaking);
       }
     }
   }, 80);
 }
+
+// ======================== VOX THRESHOLD ========================
+function setVoxThreshold(sliderValue) {
+  voxThreshold = sliderValue / 1000;
+  document.getElementById('vox-threshold-label').textContent = sliderValue;
+  localStorage.setItem('lv-vox-threshold', voxThreshold);
+}
+(function initVoxSlider() {
+  const v = Math.round(voxThreshold * 1000);
+  document.getElementById('vox-threshold-slider').value = v;
+  document.getElementById('vox-threshold-label').textContent = v;
+})();
 
 // ======================== VOICE CONTROLS ========================
 function toggleMic() {
@@ -764,7 +849,7 @@ function toggleMic() {
   localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
   document.getElementById('btn-mic').classList.toggle('muted', isMuted);
   document.getElementById('mic-label').textContent = isMuted ? 'без звука' : 'микрофон';
-  if (isMuted && isSpeaking) { isSpeaking = false; ws.send(JSON.stringify({ type: 'speaking', active: false })); }
+  if (isMuted && isSpeaking) { isSpeaking = false; wsSend({ type: 'speaking', active: false }); }
 }
 
 function toggleDeafen() {
@@ -788,14 +873,14 @@ function pttStart(e) {
   localStream.getAudioTracks().forEach(t => t.enabled = true);
   document.getElementById('ptt-btn').classList.add('held');
   document.getElementById('status-dot').classList.add('speaking');
-  ws.send(JSON.stringify({ type: 'speaking', active: true }));
+  wsSend({ type: 'speaking', active: true });
 }
 function pttStop() {
   if (!pttActive) return; pttActive = false;
   localStream.getAudioTracks().forEach(t => t.enabled = false);
   document.getElementById('ptt-btn').classList.remove('held');
   document.getElementById('status-dot').classList.remove('speaking');
-  ws.send(JSON.stringify({ type: 'speaking', active: false }));
+  wsSend({ type: 'speaking', active: false });
 }
 // ======================== KEYBOARD MUTE ========================
 let kbMuteEnabled = false, kbMuteDelay = 400, kbMuteTimer = null, kbMuteActive = false;
@@ -823,8 +908,16 @@ function triggerKbMute() {
 }
 
 // ======================== PTT HOTKEY ========================
-let pttHotkey = { type: 'key', code: 'Space', label: 'Пробел' };
+// uio — глобальный код клавиши/кнопки от uiohook (работает когда окно не в фокусе).
+// 57 = VC_SPACE. Код запоминается при обучении хоткея.
+let pttHotkey = { type: 'key', code: 'Space', label: 'Пробел', uio: 57 };
 let hotkeyListening = false;
+let hotkeyLearnGrace = 0; // окно после DOM-обучения, в котором ждём глобальный код
+
+try {
+  const saved = JSON.parse(localStorage.getItem('lv-ptt-hotkey'));
+  if (saved && saved.type) pttHotkey = saved;
+} catch(e) {}
 
 function startHotkeyListen() {
   hotkeyListening = true;
@@ -839,10 +932,63 @@ function stopHotkeyListen() {
 }
 
 function applyHotkey(hotkey) {
+  // сохраняем глобальный код, если он был пойман раньше DOM-события
+  if (hotkey.uio == null && pendingUio && pendingUio.kind === hotkey.type && Date.now() - pendingUio.at < 700) {
+    hotkey.uio = pendingUio.code;
+  }
   pttHotkey = hotkey;
+  pendingUio = null;
+  hotkeyLearnGrace = Date.now() + 700; // ждём глобальный код, если ещё не пришёл
   document.getElementById('ptt-hotkey-badge').textContent = hotkey.label;
   document.getElementById('ptt-btn-label').textContent = 'Держи (' + hotkey.label + ')';
+  saveHotkey();
   stopHotkeyListen();
+}
+
+function saveHotkey() {
+  localStorage.setItem('lv-ptt-hotkey', JSON.stringify(pttHotkey));
+}
+
+// отрисовать сохранённый хоткей при загрузке
+document.getElementById('ptt-hotkey-badge').textContent = pttHotkey.label;
+document.getElementById('ptt-btn-label').textContent = 'Держи (' + pttHotkey.label + ')';
+
+// ======================== GLOBAL INPUT (PTT в фоне, Electron) ========================
+let pendingUio = null; // глобальный код, пойманный во время обучения хоткея
+
+if (window.electronAPI && window.electronAPI.onGlobalInput) {
+  window.electronAPI.onGlobalInput(d => {
+    const isKeyEvt = d.event === 'keydown' || d.event === 'keyup';
+
+    // 1) обучение: запоминаем глобальный код нажатой клавиши/кнопки
+    if (hotkeyListening) {
+      if (d.event === 'keydown') pendingUio = { kind: 'key', code: d.keycode, at: Date.now() };
+      if (d.event === 'mousedown') pendingUio = { kind: 'mouse', code: d.button, at: Date.now() };
+      return;
+    }
+    if (Date.now() < hotkeyLearnGrace && pttHotkey.uio == null) {
+      if (d.event === 'keydown' && pttHotkey.type === 'key') { pttHotkey.uio = d.keycode; saveHotkey(); return; }
+      if (d.event === 'mousedown' && pttHotkey.type === 'mouse') { pttHotkey.uio = d.button; saveHotkey(); return; }
+    }
+
+    // 2) когда окно в фокусе — всё делают обычные DOM-обработчики
+    if (document.hasFocus()) return;
+
+    // 3) окно в фоне: PTT по глобальному хоткею
+    if (mode === 'ptt' && pttHotkey.uio != null) {
+      const match = pttHotkey.type === 'key'
+        ? (isKeyEvt && d.keycode === pttHotkey.uio)
+        : (!isKeyEvt && d.button === pttHotkey.uio);
+      if (match) {
+        if (d.event === 'keydown' || d.event === 'mousedown') pttStart();
+        else pttStop();
+        return;
+      }
+    }
+
+    // 4) клавиатурный мут работает и в фоне
+    if (d.event === 'keydown') triggerKbMute();
+  });
 }
 
 function formatKeyLabel(e) {
@@ -906,7 +1052,9 @@ async function joinVoiceRoom(roomId) {
 
 function leaveVoiceRoom(silent = false) {
   if (!myRoom) return;
-  if (!silent) { ws.send(JSON.stringify({ type: 'leave-room' })); playSound('leave'); }
+  if (isSharing) stopScreenShare();
+  closeAllScreenViewers();
+  if (!silent) { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'leave-room' })); playSound('leave'); }
   Object.values(peers).forEach(p => { if (p.pc) p.pc.close(); if (p.audioEl) p.audioEl.remove(); });
   peers = {};
   if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
@@ -929,7 +1077,12 @@ function leaveVoiceRoom(silent = false) {
 }
 
 function disconnectServer() {
+  shouldReconnect = false;
+  pendingRoom = '';
+  clearTimeout(reconnectTimer);
   leaveVoiceRoom(true);
+  if (isSharing) stopScreenShare(true);
+  closeAllScreenViewers();
   if (ws) { ws.close(); ws = null; }
   onlineUsers = {}; serverRooms = []; peers = {};
   lastMsgSender = null;
@@ -1013,9 +1166,12 @@ function sendChat() {
   chatInput.style.height = 'auto';
 }
 
-function addChatMsg(peerId, name, text, isMe) {
+function addChatMsg(peerId, name, text, isMe, ts) {
   const container = document.getElementById('chat-messages');
-  const time = new Date().toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
+  const d = ts ? new Date(ts) : new Date();
+  const sameDay = d.toDateString() === new Date().toDateString();
+  const time = (sameDay ? '' : d.toLocaleDateString('ru', { day: '2-digit', month: '2-digit' }) + ' ')
+    + d.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
   const initials = (name || '?').slice(0, 2).toUpperCase();
   const isContinued = lastMsgSender === peerId;
   lastMsgSender = peerId;
@@ -1123,7 +1279,8 @@ function setPeerVolume(id, value, container) {
 // ======================== SCREEN SHARE ========================
 let screenStream = null;
 let isSharing = false;
-const screenPeers = {}; // peerId -> RTCPeerConnection for screen
+const screenOut = {}; // peerId -> RTCPeerConnection: мой экран → зрители
+const screenIn = {};  // peerId -> RTCPeerConnection: входящие показы
 
 async function toggleScreen() {
   if (isSharing) {
@@ -1212,7 +1369,7 @@ async function startScreenShare() {
   }
 }
 
-function stopScreenShare() {
+function stopScreenShare(silent = false) {
   if (!isSharing) return;
   isSharing = false;
 
@@ -1221,10 +1378,10 @@ function stopScreenShare() {
     screenStream = null;
   }
 
-  Object.values(screenPeers).forEach(pc => pc.close());
-  for (const k in screenPeers) delete screenPeers[k];
+  Object.values(screenOut).forEach(pc => pc.close());
+  for (const k in screenOut) delete screenOut[k];
 
-  ws.send(JSON.stringify({ type: 'screen-stop' }));
+  if (!silent && ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'screen-stop' }));
 
   const btn = document.getElementById('btn-screen');
   const lbl = document.getElementById('screen-label');
@@ -1234,31 +1391,91 @@ function stopScreenShare() {
 
 async function createScreenPeer(peerId) {
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-  screenPeers[peerId] = pc;
+  screenOut[peerId] = pc;
 
   if (screenStream) {
     screenStream.getTracks().forEach(t => pc.addTrack(t, screenStream));
   }
 
   pc.onicecandidate = (e) => {
-    if (e.candidate) ws.send(JSON.stringify({ type: 'screen-signal', target: peerId, signal: e.candidate }));
+    if (e.candidate) ws.send(JSON.stringify({ type: 'screen-signal', target: peerId, role: 'sharer', signal: e.candidate }));
   };
 
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
-  ws.send(JSON.stringify({ type: 'screen-signal', target: peerId, signal: pc.localDescription }));
+  ws.send(JSON.stringify({ type: 'screen-signal', target: peerId, role: 'sharer', signal: pc.localDescription }));
   return pc;
 }
 
-// Drag for floating window
+// ======================== SCREEN VIEWERS (окна входящих показов) ========================
+// Каждый показывающий получает своё плавающее окно — несколько показов одновременно.
+const screenViewers = {}; // peerId -> { el, video, stream, rec }
+
+function showScreenViewer(peerId, stream) {
+  let v = screenViewers[peerId];
+  if (v) { v.stream = stream; v.video.srcObject = stream; return; }
+
+  const name = peers[peerId] ? peers[peerId].name : 'Участник';
+  const idx = Object.keys(screenViewers).length;
+  const el = document.createElement('div');
+  el.className = 'screen-viewer active';
+  el.style.right = (20 + idx * 40) + 'px';
+  el.style.bottom = (80 + idx * 40) + 'px';
+  el.innerHTML = `
+    <div class="screen-viewer-header">
+      <div class="screen-viewer-title">🖥 ${escHtml(name)} показывает экран</div>
+      <div class="screen-viewer-actions">
+        <span class="rec-status"><div class="rec-dot"></div><span class="rec-time">00:00</span></span>
+        <select class="rec-format" title="Формат записи">
+          <option value="mp4">MP4</option>
+          <option value="mkv">MKV</option>
+          <option value="webm">WebM</option>
+          <option value="mp3">MP3</option>
+          <option value="wav">WAV</option>
+        </select>
+        <button class="screen-viewer-btn screen-viewer-record" title="Записать">⏺</button>
+        <button class="screen-viewer-btn screen-viewer-expand">⛶</button>
+        <button class="screen-viewer-btn screen-viewer-close">✕</button>
+      </div>
+    </div>
+    <video autoplay playsinline></video>`;
+  document.body.appendChild(el);
+
+  const video = el.querySelector('video');
+  video.srcObject = stream;
+  screenViewers[peerId] = { el, video, stream, rec: null };
+
+  el.querySelector('.screen-viewer-record').onclick = () => toggleRecording(peerId);
+  el.querySelector('.screen-viewer-expand').onclick = (e) => {
+    el.classList.toggle('fullscreen-mode');
+    e.target.textContent = el.classList.contains('fullscreen-mode') ? '⊡' : '⛶';
+  };
+  el.querySelector('.screen-viewer-close').onclick = () => closeScreenViewer(peerId);
+}
+
+function closeScreenViewer(peerId) {
+  const v = screenViewers[peerId];
+  if (!v) return;
+  if (v.rec && v.rec.recorder.state === 'recording') stopRecording(peerId);
+  v.el.remove();
+  delete screenViewers[peerId];
+}
+
+function closeAllScreenViewers() {
+  Object.keys(screenViewers).forEach(closeScreenViewer);
+  Object.values(screenIn).forEach(pc => pc.close());
+  for (const k in screenIn) delete screenIn[k];
+}
+
+// Перетаскивание окон показа
 (function() {
-  let dragging = false, ox = 0, oy = 0;
+  let dragging = null, ox = 0, oy = 0;
   document.addEventListener('mousedown', e => {
-    const header = document.getElementById('screen-viewer-drag');
-    if (!header || !header.contains(e.target)) return;
-    const viewer = document.getElementById('screen-viewer');
+    const header = e.target.closest('.screen-viewer-header');
+    if (!header || e.target.closest('button') || e.target.closest('select')) return;
+    const viewer = header.parentElement;
     if (viewer.classList.contains('fullscreen-mode')) return;
-    dragging = true;
+    dragging = viewer;
     const rect = viewer.getBoundingClientRect();
     ox = e.clientX - rect.left;
     oy = e.clientY - rect.top;
@@ -1266,90 +1483,82 @@ async function createScreenPeer(peerId) {
   });
   document.addEventListener('mousemove', e => {
     if (!dragging) return;
-    const viewer = document.getElementById('screen-viewer');
-    viewer.style.left = (e.clientX - ox) + 'px';
-    viewer.style.top = (e.clientY - oy) + 'px';
-    viewer.style.right = 'auto';
-    viewer.style.bottom = 'auto';
+    dragging.style.left = (e.clientX - ox) + 'px';
+    dragging.style.top = (e.clientY - oy) + 'px';
+    dragging.style.right = 'auto';
+    dragging.style.bottom = 'auto';
   });
-  document.addEventListener('mouseup', () => { dragging = false; });
+  document.addEventListener('mouseup', () => { dragging = null; });
 })();
 
-function toggleScreenFullscreen() {
-  const viewer = document.getElementById('screen-viewer');
-  viewer.classList.toggle('fullscreen-mode');
-  const btn = viewer.querySelector('.screen-viewer-expand');
-  btn.textContent = viewer.classList.contains('fullscreen-mode') ? '⊡' : '⛶';
+// ======================== RECORDING (на каждое окно своя запись) ========================
+let ffmpegProgressTarget = null;
+if (window.electronAPI && window.electronAPI.onRecordingProgress) {
+  window.electronAPI.onRecordingProgress(d => {
+    if (ffmpegProgressTarget) {
+      ffmpegProgressTarget.timeEl.textContent = d.time;
+      ffmpegProgressTarget.status.classList.add('active');
+    }
+  });
 }
 
-let recStream = null, recMediaRecorder = null, recChunks = [], recTimerInterval = null, recSeconds = 0;
-
-function showScreenViewer(peerId, stream) {
-  recStream = stream;
-  const name = peers[peerId] ? peers[peerId].name : 'Участник';
-  document.getElementById('screen-viewer-title').textContent = '🖥 ' + name + ' показывает экран';
-  document.getElementById('screen-video').srcObject = stream;
-  document.getElementById('screen-viewer').classList.add('active');
+function toggleRecording(peerId) {
+  const v = screenViewers[peerId];
+  if (!v) return;
+  if (v.rec && v.rec.recorder.state === 'recording') stopRecording(peerId);
+  else startRecording(peerId);
 }
 
-function closeScreenViewer() {
-  if (recMediaRecorder && recMediaRecorder.state === 'recording') stopRecording();
-  recStream = null;
-  document.getElementById('screen-viewer').classList.remove('active');
-  document.getElementById('screen-video').srcObject = null;
-}
-
-function toggleRecording() {
-  if (recMediaRecorder && recMediaRecorder.state === 'recording') stopRecording();
-  else startRecording();
-}
-
-function startRecording() {
-  if (!recStream) return;
-  recChunks = []; recSeconds = 0;
+function startRecording(peerId) {
+  const v = screenViewers[peerId];
+  if (!v || !v.stream) return;
   const mime = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'].find(t => MediaRecorder.isTypeSupported(t));
-  recMediaRecorder = new MediaRecorder(recStream, { mimeType: mime });
-  recMediaRecorder.ondataavailable = e => { if (e.data.size > 0) recChunks.push(e.data); };
-  recMediaRecorder.onstop = saveRecording;
-  recMediaRecorder.start(1000);
-  document.getElementById('btn-record').textContent = '⏹';
-  document.getElementById('btn-record').classList.add('recording');
-  document.getElementById('rec-status').classList.add('active');
-  recTimerInterval = setInterval(() => {
-    recSeconds++;
-    const m = String(Math.floor(recSeconds / 60)).padStart(2, '0');
-    const s = String(recSeconds % 60).padStart(2, '0');
-    document.getElementById('rec-time').textContent = m + ':' + s;
+  const recorder = new MediaRecorder(v.stream, { mimeType: mime });
+  const rec = v.rec = {
+    recorder, chunks: [], seconds: 0, timer: null,
+    btn: v.el.querySelector('.screen-viewer-record'),
+    status: v.el.querySelector('.rec-status'),
+    timeEl: v.el.querySelector('.rec-time'),
+    formatSel: v.el.querySelector('.rec-format'),
+  };
+  recorder.ondataavailable = e => { if (e.data.size > 0) rec.chunks.push(e.data); };
+  recorder.onstop = () => saveRecording(rec);
+  recorder.start(1000);
+  rec.btn.textContent = '⏹';
+  rec.btn.classList.add('recording');
+  rec.status.classList.add('active');
+  rec.timer = setInterval(() => {
+    rec.seconds++;
+    const m = String(Math.floor(rec.seconds / 60)).padStart(2, '0');
+    const s = String(rec.seconds % 60).padStart(2, '0');
+    rec.timeEl.textContent = m + ':' + s;
   }, 1000);
 }
 
-function stopRecording() {
-  if (!recMediaRecorder || recMediaRecorder.state === 'inactive') return;
-  recMediaRecorder.stop();
-  clearInterval(recTimerInterval);
-  document.getElementById('btn-record').textContent = '⏺';
-  document.getElementById('btn-record').classList.remove('recording');
-  document.getElementById('rec-status').classList.remove('active');
+function stopRecording(peerId) {
+  const v = screenViewers[peerId];
+  if (!v || !v.rec || v.rec.recorder.state === 'inactive') return;
+  const rec = v.rec;
+  rec.recorder.stop();
+  clearInterval(rec.timer);
+  rec.btn.textContent = '⏺';
+  rec.btn.classList.remove('recording');
+  rec.status.classList.remove('active');
 }
 
-async function saveRecording() {
-  const format = document.getElementById('rec-format').value;
-  const blob = new Blob(recChunks, { type: 'video/webm' });
-  recChunks = [];
+async function saveRecording(rec) {
+  const format = rec.formatSel.value;
+  const blob = new Blob(rec.chunks, { type: 'video/webm' });
+  rec.chunks = [];
 
   if (window.electronAPI && window.electronAPI.saveRecording) {
-    const btn = document.getElementById('btn-record');
-    btn.textContent = '⏳'; btn.disabled = true;
-    if (window.electronAPI.onRecordingProgress) {
-      window.electronAPI.onRecordingProgress(d => {
-        document.getElementById('rec-time').textContent = d.time;
-        document.getElementById('rec-status').classList.add('active');
-      });
-    }
+    rec.btn.textContent = '⏳'; rec.btn.disabled = true;
+    ffmpegProgressTarget = rec;
     const buf = await blob.arrayBuffer();
     const result = await window.electronAPI.saveRecording(buf, format);
-    btn.textContent = '⏺'; btn.disabled = false;
-    document.getElementById('rec-status').classList.remove('active');
+    ffmpegProgressTarget = null;
+    rec.btn.textContent = '⏺'; rec.btn.disabled = false;
+    rec.status.classList.remove('active');
     if (result.success) addSystemMsg('✅ Запись сохранена: ' + result.path.split(/[\\/]/).pop());
     else addSystemMsg('⚠ Ошибка записи: ' + (result.error || 'неизвестно'));
   } else {
@@ -1437,27 +1646,6 @@ function toggleTheme() {
 
 applyTheme(localStorage.getItem('lv-theme') || 'night');
 </script>
-  <!-- SCREEN VIEWER OVERLAY -->
-  <div class="screen-viewer" id="screen-viewer">
-    <div class="screen-viewer-header" id="screen-viewer-drag">
-      <div class="screen-viewer-title" id="screen-viewer-title">Экран участника</div>
-      <div class="screen-viewer-actions">
-        <span class="rec-status" id="rec-status"><div class="rec-dot"></div><span id="rec-time">00:00</span></span>
-        <select class="rec-format" id="rec-format" title="Формат записи">
-          <option value="mp4">MP4</option>
-          <option value="mkv">MKV</option>
-          <option value="webm">WebM</option>
-          <option value="mp3">MP3</option>
-          <option value="wav">WAV</option>
-        </select>
-        <button class="screen-viewer-btn screen-viewer-record" id="btn-record" onclick="toggleRecording()" title="Записать">⏺</button>
-        <button class="screen-viewer-btn screen-viewer-expand" onclick="toggleScreenFullscreen()">⛶</button>
-        <button class="screen-viewer-btn screen-viewer-close" onclick="closeScreenViewer()">✕</button>
-      </div>
-    </div>
-    <video id="screen-video" autoplay playsinline></video>
-  </div>
-
   <!-- SOURCE PICKER -->
   <div class="source-picker" id="source-picker">
     <div class="source-picker-box">

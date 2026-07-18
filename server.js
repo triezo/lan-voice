@@ -77,6 +77,8 @@ const wss = new WebSocket.Server({ server });
 const rooms = {};
 const clients = new Map();
 const clientNames = new Map();
+const chatHistory = []; // последние сообщения — новые участники видят переписку
+const CHAT_HISTORY_LIMIT = 200;
 
 function broadcast(roomId, data, excludeId = null) {
   if (!rooms[roomId]) return;
@@ -120,7 +122,7 @@ wss.on('connection', (ws) => {
 
     if (msg.type === 'hello') {
       clientNames.set(clientId, msg.name || 'Аноним');
-      ws.send(JSON.stringify({ type: 'server-hello', id: clientId, rooms: getRoomState(), online: getOnlineList() }));
+      ws.send(JSON.stringify({ type: 'server-hello', id: clientId, rooms: getRoomState(), online: getOnlineList(), history: chatHistory }));
       broadcastAll({ type: 'user-online', id: clientId, name: msg.name || 'Аноним' }, clientId);
       console.log(`${msg.name || clientId} подключился к серверу`);
     }
@@ -162,12 +164,15 @@ wss.on('connection', (ws) => {
     if (msg.type === 'screen-signal') {
       const targetWs = clients.get(msg.target);
       if (targetWs && targetWs.readyState === WebSocket.OPEN)
-        targetWs.send(JSON.stringify({ type: 'screen-signal', from: clientId, signal: msg.signal }));
+        targetWs.send(JSON.stringify({ type: 'screen-signal', from: clientId, role: msg.role, signal: msg.signal }));
     }
 
     if (msg.type === 'chat') {
       if (msg.text && msg.text.trim()) {
-        broadcastAll({ type: 'chat', peerId: clientId, name: clientNames.get(clientId) || 'Аноним', text: msg.text.slice(0, 2000) }, clientId);
+        const entry = { peerId: clientId, name: clientNames.get(clientId) || 'Аноним', text: msg.text.slice(0, 2000), ts: Date.now() };
+        chatHistory.push(entry);
+        if (chatHistory.length > CHAT_HISTORY_LIMIT) chatHistory.shift();
+        broadcastAll({ type: 'chat', ...entry }, clientId);
       }
     }
 
